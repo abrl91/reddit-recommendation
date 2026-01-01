@@ -1,0 +1,9 @@
+s3:
+  region: "us-east-1"
+  buckets:
+    bronze: "reddit-data-bronze-d271225"
+
+data_paths:
+  popular_subreddits:
+    layer: bronze
+    prefix: "popular_subreddits"

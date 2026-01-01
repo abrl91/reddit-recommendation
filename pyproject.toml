@@ -6,5 +6,14 @@ readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
     "boto3>=1.42.17",
+    "boto3-stubs[s3]>=1.42.19",
     "httpx>=0.28.1",
+    "pyyaml>=6.0.3",
+]
+
+[dependency-groups]
+dev = [
+    "mypy>=1.19.1",
+    "ruff>=0.14.10",
+    "types-pyyaml>=6.0.12.20250915",
 ]
