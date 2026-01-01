@@ -61,9 +61,27 @@ ruff format src/
 ### Code Style
 - Follow PEP 8
 - Use meaningful variable names (no single letters except loop indices)
-- Docstrings for public functions (Google style)
 - Keep functions focused and small (< 30 lines ideally)
 - Prefer composition over inheritance
+
+### Comments & Docstrings (Minimal)
+- **No module-level docstrings** - file path is self-documenting
+- **No class docstrings** that just repeat the class name
+- **Function docstrings only for non-obvious info** - exceptions raised, return format
+- Skip docstrings when the function signature is self-explanatory
+
+```python
+# Good - only documents what's not obvious from signature
+def get_data_path(data_type: str) -> tuple[str, str]:
+    """Returns (bucket_name, prefix). Raises KeyError if data_type not found."""
+
+def save_to_s3(data: dict[str, Any], data_type_key: str) -> None:
+    """Raises StorageError on failure."""
+
+# Bad - redundant, just repeats the function name
+def get_config() -> Config:
+    """Get and return the configuration."""
+```
 
 ### Error Handling
 - Use specific exception types, not bare `except:`
