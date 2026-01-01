@@ -3,9 +3,11 @@ from datetime import UTC, datetime
 from typing import Any
 
 import boto3
+import polars as pl
 from botocore.exceptions import ClientError
 
 from ..config import get_data_path, get_s3_region
+from ..models import SubredditCleaned
 from .exceptions import StorageError
 
 
@@ -29,3 +31,21 @@ def save_to_s3(data: dict[str, Any], data_type_key: str) -> None:
         raise StorageError(f"Failed to save '{data_type_key}' to S3: {bucket}/{key}") from e
 
     print(f"Data saved to S3 successfully: s3://{bucket}/{key}")
+
+
+def save_parquet_to_s3(data: list[SubredditCleaned], data_type_key: str) -> None:
+    bucket, prefix = get_data_path(data_type_key)
+
+    # Pydantic models → dicts → Polars DataFrame
+    records = [item.model_dump() for item in data]
+    df = pl.DataFrame(records)
+
+    date_str = datetime.now(UTC).strftime("%Y-%m-%d")
+    s3_path = f"s3://{bucket}/{prefix}_{date_str}.parquet"
+
+    try:
+        df.write_parquet(s3_path)
+    except Exception as e:
+        raise StorageError(f"Failed to save parquet to {s3_path}") from e
+
+    print(f"Parquet saved to S3 successfully: {s3_path}")

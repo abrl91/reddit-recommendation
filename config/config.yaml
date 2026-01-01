@@ -2,8 +2,12 @@ s3:
   region: "us-east-1"
   buckets:
     bronze: "reddit-data-bronze-d271225"
+    silver: "reddit-data-silver-d010126"
 
 data_paths:
-  popular_subreddits:
+  raw_popular_subreddits:
     layer: bronze
+    prefix: "popular_subreddits"
+  cleaned_popular_subreddits:
+    layer: silver
     prefix: "popular_subreddits"
