@@ -1,9 +1,12 @@
 from datetime import UTC, datetime
 
 import polars as pl
+import structlog
 
 from ..models import SubredditListingResponse
 from .context import pipeline_step
+
+logger = structlog.get_logger().bind(module="transform")
 
 
 def _extract_to_dataframe(responses: list[SubredditListingResponse]) -> pl.DataFrame:
@@ -65,13 +68,17 @@ def _validate_data_quality(df: pl.DataFrame) -> pl.DataFrame:
 
 
 def clean_raw_data(raw_data: list[SubredditListingResponse]) -> pl.DataFrame:
+    logger.info("Starting transformation", input_records=len(raw_data))
+
     with pipeline_step("extract", record_count=len(raw_data)):
         df = _extract_to_dataframe(raw_data)
 
     if df.is_empty():
+        logger.warning("No records extracted, returning empty DataFrame")
         return df
-    
+
     record_count = len(df)
+    logger.info("Extraction complete", extracted_records=record_count)
 
     with pipeline_step("normalize_urls", record_count):
         df = df.pipe(_normalize_urls)
@@ -87,5 +94,8 @@ def clean_raw_data(raw_data: list[SubredditListingResponse]) -> pl.DataFrame:
 
     with pipeline_step("validate_data_quality", record_count):
         df = df.pipe(_validate_data_quality)
+
+    final_count = len(df)
+    logger.info("Transformation complete", output_records=final_count, dropped_records=record_count - final_count)
 
     return df

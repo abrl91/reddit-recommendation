@@ -4,14 +4,16 @@ from typing import Any
 
 import boto3
 import polars as pl
+import structlog
 from botocore.exceptions import ClientError
 
 from ..config import get_data_path, get_s3_region
 from .exceptions import StorageError
 
+logger = structlog.get_logger().bind(module="storage")
+
 
 def save_to_s3(data: dict[str, Any], data_type_key: str) -> None:
-    """Raises StorageError on failure."""
     bucket, prefix = get_data_path(data_type_key)
     region = get_s3_region()
 
@@ -29,7 +31,7 @@ def save_to_s3(data: dict[str, Any], data_type_key: str) -> None:
     except ClientError as e:
         raise StorageError(f"Failed to save '{data_type_key}' to S3: {bucket}/{key}") from e
 
-    print(f"Data saved to S3 successfully: s3://{bucket}/{key}")
+    logger.info("Data saved to S3", bucket=bucket, key=key)
 
 
 def save_parquet_to_s3(df: pl.DataFrame, data_type_key: str) -> None:
@@ -43,4 +45,4 @@ def save_parquet_to_s3(df: pl.DataFrame, data_type_key: str) -> None:
     except Exception as e:
         raise StorageError(f"Failed to save parquet to {s3_path}") from e
 
-    print(f"Parquet saved to S3 successfully: {s3_path}")
+    logger.info("Parquet saved to S3", path=s3_path, records=len(df))
