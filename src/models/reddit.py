@@ -1,7 +1,5 @@
 from typing import TypedDict
 
-from pydantic import BaseModel
-
 
 class SubredditData(TypedDict, total=False):
     """Subreddit data from Reddit API. Using total=False since API returns many more fields."""
@@ -30,16 +28,3 @@ class SubredditListingData(TypedDict):
 class SubredditListingResponse(TypedDict):
     kind: str
     data: SubredditListingData
-
-
-class SubredditCleaned(BaseModel):
-    """Cleaned subreddit data after transformation pipeline."""
-
-    subreddit_name: str = ""
-    title: str = ""
-    description: str = ""
-    subscribers: int = 0
-    created_date: str | None = None
-    is_nsfw: bool = False
-    url: str = ""
-    processed_at: str | None = None

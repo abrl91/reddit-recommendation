@@ -1,101 +1,79 @@
-from collections.abc import Callable
 from datetime import UTC, datetime
-from functools import reduce
 
-from ..models import SubredditCleaned, SubredditData, SubredditListingResponse
+import polars as pl
 
-TransformFn = Callable[[SubredditCleaned], SubredditCleaned]
-
-
-def _pipe(data: SubredditCleaned, steps: list[TransformFn]) -> SubredditCleaned:
-    """Apply a sequence of transform functions to data."""
-    return reduce(lambda d, fn: fn(d), steps, data)
+from ..models import SubredditListingResponse
 
 
-def _extract_nested_data(response: SubredditListingResponse) -> list[SubredditCleaned]:
-    """Extract subreddits from nested API response structure."""
-    results: list[SubredditCleaned] = []
+def _extract_to_dataframe(responses: list[SubredditListingResponse]) -> pl.DataFrame:
+    records: list[dict] = []
 
-    for child in response["data"]["children"]:
-        raw: SubredditData = child["data"]
-        cleaned = SubredditCleaned(
-            subreddit_name=raw.get("display_name", ""),
-            title=raw.get("title", ""),
-            description=raw.get("public_description", ""),
-            subscribers=raw.get("subscribers", 0),
-            is_nsfw=raw.get("over18", False),
-            url=raw.get("url", ""),
-            created_date=str(raw.get("created_utc", 0)),
-        )
-        results.append(cleaned)
+    for response in responses:
+        for child in response["data"]["children"]:
+            records.append(child["data"])
 
-    return results
+    if not records:
+        return pl.DataFrame()
+
+    return pl.DataFrame(records).select([
+        pl.col("display_name").alias("subreddit_name"),
+        pl.col("title"),
+        pl.col("public_description").alias("description"),
+        pl.col("subscribers"),
+        pl.col("over18").alias("is_nsfw"),
+        pl.col("url"),
+        pl.col("created_utc").alias("created_date"),
+    ])
 
 
-def _normalize_fields(data: SubredditCleaned) -> SubredditCleaned:
-    """Normalize field values (e.g., prepend reddit.com to URL)."""
-    return data.model_copy(
-        update={"url": f"https://reddit.com{data.url}"}
+def _normalize_urls(df: pl.DataFrame) -> pl.DataFrame:
+    """Prepend reddit.com to relative URLs."""
+    return df.with_columns(
+        pl.concat_str([pl.lit("https://reddit.com"), pl.col("url")]).alias("url")
     )
 
 
-def _convert_timestamps(data: SubredditCleaned) -> SubredditCleaned:
-    """Convert Unix timestamp to ISO 8601 date string."""
-    try:
-        unix_ts = float(data.created_date or 0)
-        iso_date = datetime.fromtimestamp(unix_ts, tz=UTC).strftime("%Y-%m-%d")
-    except (ValueError, TypeError):
-        iso_date = ""
-
-    return data.model_copy(update={"created_date": iso_date})
-
-
-def _add_metadata(data: SubredditCleaned) -> SubredditCleaned:
-    """Add processing metadata (timestamp)."""
-    return data.model_copy(
-        update={"processed_at": datetime.now(UTC).isoformat()}
+def _convert_timestamps(df: pl.DataFrame) -> pl.DataFrame:
+    return df.with_columns(
+        pl.from_epoch(pl.col("created_date")).dt.strftime("%Y-%m-%d").alias("created_date")
     )
 
 
-def _remove_nulls(data: SubredditCleaned) -> SubredditCleaned:
-    """Replace None values with sensible defaults."""
-    updates: dict[str, str] = {}
-
-    if data.created_date is None:
-        updates["created_date"] = ""
-    if data.processed_at is None:
-        updates["processed_at"] = ""
-
-    return data.model_copy(update=updates) if updates else data
+def _add_metadata(df: pl.DataFrame) -> pl.DataFrame:
+    return df.with_columns(
+        pl.lit(datetime.now(UTC).isoformat()).alias("processed_at")
+    )
 
 
-def _validate_data_quality(data: SubredditCleaned) -> SubredditCleaned:
-    """Validate required fields. Raises ValueError if invalid, returns data if valid."""
-    if not data.subreddit_name:
-        raise ValueError("subreddit_name is required")
-    return data
+def _fill_nulls(df: pl.DataFrame) -> pl.DataFrame:
+    return df.with_columns([
+        pl.col("subreddit_name").fill_null(""),
+        pl.col("title").fill_null(""),
+        pl.col("description").fill_null(""),
+        pl.col("subscribers").fill_null(0),
+        pl.col("is_nsfw").fill_null(False),
+        pl.col("url").fill_null(""),
+        pl.col("created_date").fill_null(""),
+    ])
 
 
-CLEANUP_PIPELINE: list[TransformFn] = [
-    _normalize_fields,
-    _convert_timestamps,
-    _add_metadata,
-    _remove_nulls,
-    _validate_data_quality,
-]
+def _validate_data_quality(df: pl.DataFrame) -> pl.DataFrame:
+    return df.filter(
+        pl.col("subreddit_name").is_not_null() & (pl.col("subreddit_name") != "")
+    )
 
 
-def clean_row_data(
-    raw_data: list[SubredditListingResponse],
-) -> list[SubredditCleaned]:
-    """Main entry point: transform raw API responses through the pipeline."""
-    results: list[SubredditCleaned] = []
+def clean_raw_data(raw_data: list[SubredditListingResponse]) -> pl.DataFrame:
+    """Transform raw API responses through the pipeline. Returns a Polars DataFrame."""
+    df = _extract_to_dataframe(raw_data)
 
-    for response in raw_data:
-        for item in _extract_nested_data(response):
-            clean_data = _pipe(item, CLEANUP_PIPELINE)
-            results.append(clean_data)
+    if df.is_empty():
+        return df
 
-    return results
-
-
+    return (
+        df.pipe(_normalize_urls)
+        .pipe(_convert_timestamps)
+        .pipe(_add_metadata)
+        .pipe(_fill_nulls)
+        .pipe(_validate_data_quality)
+    )
