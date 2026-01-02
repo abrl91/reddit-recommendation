@@ -7,8 +7,8 @@ import polars as pl
 import structlog
 from botocore.exceptions import ClientError
 
-from ..config import get_data_path, get_s3_region
-from .exceptions import StorageError
+from src.config import get_data_path, get_s3_region
+from src.storage.exceptions import StorageError
 
 logger = structlog.get_logger().bind(module="storage")
 

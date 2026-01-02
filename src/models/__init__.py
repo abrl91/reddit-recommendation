@@ -1,4 +1,4 @@
-from .reddit import (
+from src.models.reddit import (
     SubredditChild,
     SubredditData,
     SubredditListingData,

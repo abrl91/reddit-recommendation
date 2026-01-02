@@ -3,9 +3,9 @@ import json
 import boto3
 import structlog
 
-from ..config import get_data_path, get_s3_region
-from ..models import SubredditListingResponse
-from .exceptions import StorageError
+from src.config import get_data_path, get_s3_region
+from src.models import SubredditListingResponse
+from src.storage.exceptions import StorageError
 
 logger = structlog.get_logger().bind(module="storage")
 

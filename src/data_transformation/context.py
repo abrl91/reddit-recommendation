@@ -1,7 +1,7 @@
 from contextlib import contextmanager
 from typing import Generator
 
-from .exceptions import TransformationError
+from src.data_transformation.exceptions import TransformationError
 
 
 @contextmanager

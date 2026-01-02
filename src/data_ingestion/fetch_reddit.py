@@ -3,7 +3,7 @@ from typing import Any
 import httpx
 import structlog
 
-from .exceptions import IngestionError
+from src.data_ingestion.exceptions import IngestionError
 
 logger = structlog.get_logger().bind(module="ingestion")
 

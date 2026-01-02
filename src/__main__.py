@@ -1,9 +1,9 @@
 import structlog
 
-from .data_ingestion.exceptions import IngestionError
-from .data_ingestion.fetch_reddit import fetch_popular_subreddits
-from .data_transformation import TransformationError, clean_raw_data
-from .storage import StorageError, read_from_s3, save_parquet_to_s3, save_to_s3
+from src.data_ingestion.exceptions import IngestionError
+from src.data_ingestion.fetch_reddit import fetch_popular_subreddits
+from src.data_transformation import TransformationError, clean_raw_data
+from src.storage import StorageError, read_from_s3, save_parquet_to_s3, save_to_s3
 
 logger = structlog.get_logger()
 
