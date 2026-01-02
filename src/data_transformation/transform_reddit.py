@@ -3,6 +3,7 @@ from datetime import UTC, datetime
 import polars as pl
 
 from ..models import SubredditListingResponse
+from .context import pipeline_step
 
 
 def _extract_to_dataframe(responses: list[SubredditListingResponse]) -> pl.DataFrame:
@@ -64,16 +65,27 @@ def _validate_data_quality(df: pl.DataFrame) -> pl.DataFrame:
 
 
 def clean_raw_data(raw_data: list[SubredditListingResponse]) -> pl.DataFrame:
-    """Transform raw API responses through the pipeline. Returns a Polars DataFrame."""
-    df = _extract_to_dataframe(raw_data)
+    with pipeline_step("extract", record_count=len(raw_data)):
+        df = _extract_to_dataframe(raw_data)
 
     if df.is_empty():
         return df
+    
+    record_count = len(df)
 
-    return (
-        df.pipe(_normalize_urls)
-        .pipe(_convert_timestamps)
-        .pipe(_add_metadata)
-        .pipe(_fill_nulls)
-        .pipe(_validate_data_quality)
-    )
+    with pipeline_step("normalize_urls", record_count):
+        df = df.pipe(_normalize_urls)
+
+    with pipeline_step("convert_timestamps", record_count):
+        df = df.pipe(_convert_timestamps)
+
+    with pipeline_step("add_metadata", record_count):
+        df = df.pipe(_add_metadata)
+
+    with pipeline_step("fill_nulls", record_count):
+        df = df.pipe(_fill_nulls)
+
+    with pipeline_step("validate_data_quality", record_count):
+        df = df.pipe(_validate_data_quality)
+
+    return df

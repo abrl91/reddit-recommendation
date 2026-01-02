@@ -1,7 +1,7 @@
 from .data_ingestion.exceptions import IngestionError
 from .data_ingestion.fetch_reddit import fetch_popular_subreddits
-from .data_transformation import clean_raw_data
-from .storage import save_to_s3, read_from_s3, StorageError, save_parquet_to_s3
+from .data_transformation import TransformationError, clean_raw_data
+from .storage import StorageError, read_from_s3, save_parquet_to_s3, save_to_s3
 
 
 def create_bronze():
@@ -18,12 +18,13 @@ def create_bronze():
 def create_silver():
     print("Creating silver layer...")
     try:
-        row_data = read_from_s3("raw_popular_subreddits")
-        clean_data = clean_raw_data(row_data)
+        raw_data = read_from_s3("raw_popular_subreddits")
+        clean_data = clean_raw_data(raw_data)
         save_parquet_to_s3(clean_data, "cleaned_popular_subreddits")
-
     except StorageError as e:
         print(f"Storage error: {e}")
+    except TransformationError as e:
+        print(f"Transformation error: {e}")
     
 
 def main() -> None:
