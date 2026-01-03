@@ -3,7 +3,7 @@ import structlog
 from src.data_ingestion.exceptions import IngestionError
 from src.data_ingestion.fetch_reddit import fetch_popular_subreddits
 from src.data_transformation import TransformationError, clean_raw_data
-from src.storage import StorageError, read_from_s3, save_to_s3
+from src.storage import StorageError, read_json_from_s3, read_parquet_from_s3, save_to_s3
 
 logger = structlog.get_logger()
 
@@ -25,11 +25,14 @@ def create_silver() -> None:
     log = logger.bind(layer="silver")
     log.info("Creating silver layer")
     try:
-        raw_data = read_from_s3("raw_popular_subreddits")
+        raw_data = read_json_from_s3("raw_popular_subreddits")
         clean_data = clean_raw_data(raw_data)
         save_to_s3(clean_data, "cleaned_popular_subreddits",
                    file_format="parquet")
         log.info("Silver layer created successfully")
+        clean_parquet = read_parquet_from_s3("cleaned_popular_subreddits")
+        log.info("Silver layer read successfully", records=len(
+            clean_parquet), clean_parquet=clean_parquet)
     except StorageError as e:
         log.error("Storage failed", error=str(e))
     except TransformationError as e:
