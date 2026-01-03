@@ -1,6 +1,6 @@
 import json
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, Literal
 
 import boto3
 import polars as pl
@@ -13,36 +13,52 @@ from src.storage.exceptions import StorageError
 logger = structlog.get_logger().bind(module="storage")
 
 
-def save_to_s3(data: dict[str, Any], data_type_key: str) -> None:
+def save_to_s3(data: Any, data_type_key: str, file_format: Literal["json", "parquet"]) -> None:
+    """
+    Save data to S3 in the specified format.
+    Based on the file format, we use different methods to save the data:
+    - json - using boto3
+    - parquet - using polars
+
+    Args:
+        data: The data to save (dict/list for 'json', pl.DataFrame for 'parquet').
+        data_type_key: Key used to look up bucket and prefix.
+        file_format: The format to save in ('json' or 'parquet').
+    """
     bucket, prefix = get_data_path(data_type_key)
-    region = get_s3_region()
-
-    s3_client = boto3.client("s3", region_name=region)
-    current_date = datetime.now(UTC).strftime("%Y-%m-%d")
-    key = f"{prefix}_{current_date}.json"
-
-    try:
-        s3_client.put_object(
-            Bucket=bucket,
-            Key=key,
-            Body=json.dumps(data),
-            ContentType="application/json",
-        )
-    except ClientError as e:
-        raise StorageError(f"Failed to save '{data_type_key}' to S3: {bucket}/{key}") from e
-
-    logger.info("Data saved to S3", bucket=bucket, key=key)
-
-
-def save_parquet_to_s3(df: pl.DataFrame, data_type_key: str) -> None:
-    bucket, prefix = get_data_path(data_type_key)
-
     date_str = datetime.now(UTC).strftime("%Y-%m-%d")
-    s3_path = f"s3://{bucket}/{prefix}_{date_str}.parquet"
 
-    try:
-        df.write_parquet(s3_path)
-    except Exception as e:
-        raise StorageError(f"Failed to save parquet to {s3_path}") from e
+    if file_format == "json":
+        region = get_s3_region()
+        s3_client = boto3.client("s3", region_name=region)
+        key = f"{prefix}_{date_str}.json"
+        try:
+            s3_client.put_object(
+                Bucket=bucket,
+                Key=key,
+                Body=json.dumps(data),
+                ContentType="application/json",
+            )
+            logger.info("JSON saved to S3", bucket=bucket, key=key)
+            return
+        except ClientError as e:
+            raise StorageError(
+                f"Failed to save JSON to S3: {bucket}/{key}") from e
 
-    logger.info("Parquet saved to S3", path=s3_path, records=len(df))
+    if file_format == "parquet":
+        if not isinstance(data, pl.DataFrame):
+            try:
+                data = pl.DataFrame(data)
+            except Exception as e:
+                raise StorageError(
+                    f"Data provided for parquet format is not compatible: {e}") from e
+
+        s3_path = f"s3://{bucket}/{prefix}_{date_str}.parquet"
+        try:
+            data.write_parquet(s3_path)
+            logger.info("Parquet saved to S3", path=s3_path, records=len(data))
+            return
+        except Exception as e:
+            raise StorageError(f"Failed to save parquet to {s3_path}") from e
+
+    raise ValueError(f"Unsupported file format: {file_format}")
