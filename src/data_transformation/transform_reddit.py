@@ -4,13 +4,14 @@ import polars as pl
 import structlog
 
 from src.models import SubredditListingResponse
+from src.models.reddit import SubredditData
 from src.data_transformation.context import pipeline_step
 
 logger = structlog.get_logger().bind(module="transform")
 
 
 def _extract_to_dataframe(responses: list[SubredditListingResponse]) -> pl.DataFrame:
-    records: list[dict] = []
+    records: list[SubredditData] = []
 
     for response in responses:
         for child in response["data"]["children"]:
@@ -33,13 +34,15 @@ def _extract_to_dataframe(responses: list[SubredditListingResponse]) -> pl.DataF
 def _normalize_urls(df: pl.DataFrame) -> pl.DataFrame:
     """Prepend reddit.com to relative URLs."""
     return df.with_columns(
-        pl.concat_str([pl.lit("https://reddit.com"), pl.col("url")]).alias("url")
+        pl.concat_str([pl.lit("https://reddit.com"),
+                      pl.col("url")]).alias("url")
     )
 
 
 def _convert_timestamps(df: pl.DataFrame) -> pl.DataFrame:
     return df.with_columns(
-        pl.from_epoch(pl.col("created_date")).dt.strftime("%Y-%m-%d").alias("created_date")
+        pl.from_epoch(pl.col("created_date")).dt.strftime(
+            "%Y-%m-%d").alias("created_date")
     )
 
 
@@ -63,7 +66,8 @@ def _fill_nulls(df: pl.DataFrame) -> pl.DataFrame:
 
 def _validate_data_quality(df: pl.DataFrame) -> pl.DataFrame:
     return df.filter(
-        pl.col("subreddit_name").is_not_null() & (pl.col("subreddit_name") != "")
+        pl.col("subreddit_name").is_not_null() & (
+            pl.col("subreddit_name") != "")
     )
 
 
@@ -96,6 +100,7 @@ def clean_raw_data(raw_data: list[SubredditListingResponse]) -> pl.DataFrame:
         df = df.pipe(_validate_data_quality)
 
     final_count = len(df)
-    logger.info("Transformation complete", output_records=final_count, dropped_records=record_count - final_count)
+    logger.info("Transformation complete", output_records=final_count,
+                dropped_records=record_count - final_count)
 
     return df
