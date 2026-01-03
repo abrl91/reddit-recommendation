@@ -1,3 +1,4 @@
+from datetime import UTC, datetime
 from functools import lru_cache
 from pathlib import Path
 from typing import Literal, TypedDict
@@ -56,3 +57,9 @@ def get_data_path(data_type_key: str) -> tuple[str, str]:
     layer = get_s3_bucket(data_config["layer"])
     prefix = data_config["prefix"]
     return layer, prefix
+
+
+def get_partition_path(prefix: str, date: datetime | None = None) -> str:
+    """Returns a Hive-style partition path: prefix/year=YYYY/month=MM/day=DD/"""
+    dt = date or datetime.now(UTC)
+    return f"{prefix}/year={dt.year}/month={dt.month:02d}/day={dt.day:02d}"
