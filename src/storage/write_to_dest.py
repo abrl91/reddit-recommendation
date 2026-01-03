@@ -1,19 +1,17 @@
 import json
-from datetime import UTC, datetime
-from typing import Any, Literal
-
 import boto3
 import polars as pl
 import structlog
 from botocore.exceptions import ClientError
 
 from src.config import get_data_path, get_partition_path, get_s3_region
+from src.models.reddit import SubredditListingResponse
 from src.storage.exceptions import StorageError
 
 logger = structlog.get_logger().bind(module="storage")
 
 
-def save_json_to_s3(data: Any, data_type_key: str) -> None:
+def save_json_to_s3(data: SubredditListingResponse, data_type_key: str) -> None:
     """
     Save data to S3 in JSON format using Hive-style partitioning.
     Path: prefix/year=YYYY/month=MM/day=DD/data.json

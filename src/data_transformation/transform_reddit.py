@@ -52,6 +52,28 @@ def _add_metadata(df: pl.DataFrame) -> pl.DataFrame:
     )
 
 
+def _log_null_stats(df: pl.DataFrame) -> pl.DataFrame:
+    """Log null counts per column for data quality monitoring. Returns df unchanged."""
+    total_rows = len(df)
+    null_counts = {
+        col: df[col].null_count()
+        for col in df.columns
+        if df[col].null_count() > 0
+    }
+
+    if null_counts:
+        logger.warning(
+            "Null values detected before filling",
+            total_rows=total_rows,
+            null_counts=null_counts,
+            null_rate={col: round(count / total_rows, 3) for col, count in null_counts.items()},
+        )
+    else:
+        logger.debug("No null values detected")
+
+    return df
+
+
 def _fill_nulls(df: pl.DataFrame) -> pl.DataFrame:
     return df.with_columns([
         pl.col("subreddit_name").fill_null(""),
@@ -92,6 +114,9 @@ def clean_raw_data(raw_data: list[SubredditListingResponse]) -> pl.DataFrame:
 
     with pipeline_step("add_metadata", record_count):
         df = df.pipe(_add_metadata)
+
+    with pipeline_step("log_null_stats", record_count):
+        df = df.pipe(_log_null_stats)
 
     with pipeline_step("fill_nulls", record_count):
         df = df.pipe(_fill_nulls)
