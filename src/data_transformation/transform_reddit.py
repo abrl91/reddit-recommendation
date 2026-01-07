@@ -10,6 +10,28 @@ from src.data_transformation.context import pipeline_step
 logger = structlog.get_logger().bind(module="transform")
 
 
+EXTRACTED_SCHEMA = {
+    "subreddit_name": pl.String,
+    "title": pl.String,
+    "description": pl.String,
+    "subscribers": pl.Int64,
+    "is_nsfw": pl.Boolean,
+    "url": pl.String,
+    "created_date": pl.Float64,
+}
+
+# Mapping from API field names to our schema names
+_FIELD_MAPPING: list[tuple[str, str, type[pl.DataType]]] = [
+    ("display_name", "subreddit_name", pl.String),
+    ("title", "title", pl.String),
+    ("public_description", "description", pl.String),
+    ("subscribers", "subscribers", pl.Int64),
+    ("over18", "is_nsfw", pl.Boolean),
+    ("url", "url", pl.String),
+    ("created_utc", "created_date", pl.Float64),
+]
+
+
 def _extract_to_dataframe(responses: list[SubredditListingResponse]) -> pl.DataFrame:
     records: list[SubredditData] = []
 
@@ -18,24 +40,29 @@ def _extract_to_dataframe(responses: list[SubredditListingResponse]) -> pl.DataF
             records.append(child["data"])
 
     if not records:
-        return pl.DataFrame()
+        return pl.DataFrame(schema=EXTRACTED_SCHEMA)
 
-    return pl.DataFrame(records).select([
-        pl.col("display_name").alias("subreddit_name"),
-        pl.col("title"),
-        pl.col("public_description").alias("description"),
-        pl.col("subscribers"),
-        pl.col("over18").alias("is_nsfw"),
-        pl.col("url"),
-        pl.col("created_utc").alias("created_date"),
-    ])
+    df = pl.DataFrame(records)
+    existing_cols = set(df.columns)
+
+    # Build selection: use column if exists, otherwise null literal
+    selections = []
+    for api_field, output_name, dtype in _FIELD_MAPPING:
+        if api_field in existing_cols:
+            selections.append(pl.col(api_field).cast(dtype).alias(output_name))
+        else:
+            selections.append(pl.lit(None).cast(dtype).alias(output_name))
+
+    return df.select(selections)
 
 
 def _normalize_urls(df: pl.DataFrame) -> pl.DataFrame:
-    """Prepend reddit.com to relative URLs."""
+    """Prepend reddit.com to relative URLs. Skip URLs that are already absolute."""
     return df.with_columns(
-        pl.concat_str([pl.lit("https://reddit.com"),
-                      pl.col("url")]).alias("url")
+        pl.when(pl.col("url").str.starts_with("http"))
+        .then(pl.col("url"))
+        .otherwise(pl.concat_str([pl.lit("https://reddit.com"), pl.col("url")]))
+        .alias("url")
     )
 
 
