@@ -304,21 +304,22 @@ import boto3
 **What to improve:**
 
 - Separate bronze and silver logic into different modules
-- Add data validation:
-    - Schema validation (ensure required fields exist)
-    - Data quality checks (no nulls in key fields, valid URLs)
-    - Record count validation (bronze count ≈ silver count)
+- Add defensive data handling:
+    - Filter records missing required fields (e.g., subreddit_name)
+    - Fill nulls with sensible defaults
+    - Log null statistics before filling (visibility into data quality)
 - Implement better file naming with partitioning:
     - `s3://reddit-data-silver/subreddits/year=2025/month=12/day=20/data.parquet`
 - Add logging for transformation stats (records processed, dropped, etc.)
-- Add data quality report (CSV or JSON summary)
 
 **Success Criteria:**
 
 - ✓ Modular code with clear separation of concerns
-- ✓ Validation catches and logs data issues
+- ✓ Transformation handles missing/null data gracefully
 - ✓ Partitioned file structure in S3
-- ✓ Quality report shows transformation metrics
+- ✓ Logs show transformation metrics (input/output counts, dropped records)
+
+> **Note:** Advanced data quality features (persistent reports, record count assertions, comprehensive validation rules) are deferred to M8 (Validation & Analytics) where they fit naturally with the analytics dashboard.
 
 ---
 
@@ -723,10 +724,12 @@ from groq import Groq
         - Accuracy over time (as user rates more)
         - Precision/recall curves
         - Confusion matrix for recommendations
-    - **Data Quality Metrics:**
+    - **Data Quality Metrics (deferred from M2):**
         - API success rate
-        - Data completeness over time
+        - Data completeness over time (null rates, missing fields)
         - Processing pipeline health
+        - Record count validation (bronze vs silver layer counts)
+        - Data quality report (CSV/JSON summary per run)
 
 **Deliverables:**
 

@@ -25,3 +25,6 @@ credentials.json
 
 # Project specific
 *.log
+
+# Claude
+plans/*

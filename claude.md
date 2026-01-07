@@ -33,8 +33,6 @@ See `design.md` for detailed roadmap and milestones.
 ### Type Safety (Strict)
 - **Always use type hints** for function parameters and return types
 - **Never use `Any`** unless absolutely unavoidable (and document why)
-- Use `TypedDict` for dictionary structures with known keys
-- Use `dataclasses` or `pydantic` models for data structures
 - Prefer `Literal` types for string enums
 
 ```python
@@ -46,6 +44,31 @@ def fetch_subreddits(limit: int = 25) -> list[SubredditData]:
 def fetch_subreddits(limit=25):
     ...
 ```
+
+### TypedDict vs Pydantic
+
+Use the right tool for the job:
+
+| Use Case | Tool | Why |
+|----------|------|-----|
+| External API responses (Reddit, etc.) | `TypedDict` | Schema may change, no runtime overhead, handle missing fields defensively in transformation |
+| Internal data contracts you control | `TypedDict` or `dataclass` | Compile-time checks sufficient when you control both ends |
+| User input validation (FastAPI endpoints) | `Pydantic` | Need runtime validation, error messages, coercion |
+
+```python
+# External API - use TypedDict (flexible, no runtime cost)
+class SubredditData(TypedDict, total=False):
+    display_name: str
+    subscribers: int
+    # total=False: fields are optional, handle missing in transform
+
+# User input (M10+) - use Pydantic (runtime validation)
+class RatingRequest(BaseModel):
+    subreddit_name: str
+    rating: Literal["like", "dislike"]
+```
+
+**Key principle:** For data pipelines processing external data, prefer TypedDict + defensive transformation (null filling, filtering) over strict runtime validation that would break on API changes.
 
 ### Static Analysis Tools
 - **mypy**: Strict mode for type checking
@@ -136,6 +159,9 @@ except:
 3. Clean up with best practices
 4. Move forward
 
+### Planning
+When creating implementation plans, save them to the `plans/` folder in the project root (not `.claude/plans/`). This keeps plans version-controlled and easily accessible. Use descriptive filenames like `plans/unit-tests.md` or `plans/airflow-setup.md`.
+
 ### Learning Focus
 When implementing something new:
 1. Explain the concept/technology if asked
@@ -167,7 +193,7 @@ python -m src.data_ingestion.fetch_reddit
 
 ## Current Milestone
 
-Starting at **M1.1 - Ugly MVP**: Fetch trending subreddits and save to S3.
+**M1 and M2 complete** (except unit tests). Next: M3 (Airflow Orchestration) or add tests first.
 
 ## Notes for Claude
 
