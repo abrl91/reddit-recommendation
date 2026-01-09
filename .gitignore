@@ -11,7 +11,6 @@ wheels/
 
 # Environment variables / secrets
 .env
-.env
 *.pem
 credentials.json
 
@@ -28,3 +27,8 @@ credentials.json
 
 # Claude
 plans/*
+
+# Airflow
+airflow/logs/
+airflow/.env
+airflow/requirements.txt
