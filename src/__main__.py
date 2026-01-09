@@ -1,13 +1,13 @@
 import structlog
 
-from src.data_ingestion.exceptions import IngestionError
-from src.data_ingestion.fetch_reddit import (
+from src.ingestion.exceptions import IngestionError
+from src.ingestion.fetch_reddit import (
     fetch_hot_subreddits,
     fetch_new_subreddits,
     fetch_popular_subreddits,
     fetch_rising_subreddits,
 )
-from src.data_transformation import (
+from src.transformation import (
     DataQualityError,
     TransformationError,
     clean_multi_source_data,

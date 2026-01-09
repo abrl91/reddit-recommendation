@@ -3,7 +3,7 @@ from typing import cast
 import httpx
 import structlog
 
-from src.data_ingestion.exceptions import IngestionError
+from src.ingestion.exceptions import IngestionError
 from src.models.reddit import (
     SubredditChild,
     SubredditData,

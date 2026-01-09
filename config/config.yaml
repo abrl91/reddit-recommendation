@@ -21,11 +21,3 @@ data_paths:
   cleaned_subreddits:
     layer: silver
     prefix: "subreddits"
-
-  # DEPRECATED - keep for backward compatibility during transition
-  # raw_popular_subreddits:
-  #   layer: bronze
-  #   prefix: "popular_subreddits"
-  # cleaned_popular_subreddits:
-  #   layer: silver
-  #   prefix: "popular_subreddits"

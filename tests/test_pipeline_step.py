@@ -1,7 +1,7 @@
 import pytest
 
-from src.data_transformation.context import pipeline_step
-from src.data_transformation.exceptions import TransformationError
+from src.transformation.context import pipeline_step
+from src.transformation.exceptions import TransformationError
 
 
 class TestPipelineStep:

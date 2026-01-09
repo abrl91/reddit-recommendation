@@ -4,8 +4,8 @@ from unittest.mock import MagicMock
 import httpx
 import pytest
 
-from src.data_ingestion.exceptions import IngestionError
-from src.data_ingestion.fetch_reddit import fetch_popular_subreddits
+from src.ingestion.exceptions import IngestionError
+from src.ingestion.fetch_reddit import fetch_popular_subreddits
 from src.models.reddit import SubredditListingResponse
 
 

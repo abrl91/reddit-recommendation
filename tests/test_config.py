@@ -37,9 +37,9 @@ class TestGetPartitionPath:
 class TestGetDataPath:
     def test_returns_bucket_and_prefix_for_valid_key(self) -> None:
         """Valid data_type_key should return (bucket, prefix) tuple."""
-        bucket, prefix = get_data_path("raw_popular_subreddits")
+        bucket, prefix = get_data_path("raw_subreddits_popular")
         assert bucket == "reddit-data-bronze-d271225"
-        assert prefix == "popular_subreddits"
+        assert prefix == "subreddits/popular"
 
     def test_raises_key_error_for_invalid_key(self) -> None:
         """Invalid data_type_key should raise KeyError."""

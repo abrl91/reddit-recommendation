@@ -3,8 +3,8 @@ from datetime import datetime
 from airflow import DAG
 from airflow.operators.python import PythonOperator
 
-from src.data_ingestion.fetch_reddit import fetch_popular_subreddits
-from src.data_transformation import clean_raw_data
+from src.ingestion.fetch_reddit import fetch_popular_subreddits
+from src.transformation import clean_multi_source_data
 from src.storage import read_json_from_s3, save_json_to_s3, save_parquet_to_s3
 
 

@@ -72,7 +72,7 @@ def sample_subreddit_response_multiple() -> SubredditListingResponse:
 
 @pytest.fixture
 def sample_extracted_dataframe() -> pl.DataFrame:
-    """DataFrame as it looks after _extract_to_dataframe()."""
+    """DataFrame as it looks after extraction from API response."""
     return pl.DataFrame({
         "subreddit_name": ["Python", "learnpython"],
         "title": ["Python Programming", "Learn Python"],

@@ -40,7 +40,7 @@ class TestReadJsonFromS3:
 
         with patch("src.storage.read_from_dest.get_partition_path") as mock_path:
             mock_path.return_value = "prefix/year=2025/month=01/day=07"
-            result = read_json_from_s3("raw_popular_subreddits")
+            result = read_json_from_s3("raw_subreddits_popular")
 
         assert len(result) == 2
         assert result[0]["data"]["children"][0]["data"]["name"] == "sub1"
@@ -58,7 +58,7 @@ class TestReadJsonFromS3:
 
         with patch("src.storage.read_from_dest.get_partition_path") as mock_path:
             mock_path.return_value = "prefix/year=2025/month=01/day=07"
-            result = read_json_from_s3("raw_popular_subreddits")
+            result = read_json_from_s3("raw_subreddits_popular")
 
         assert result == []
 
@@ -88,7 +88,7 @@ class TestReadJsonFromS3:
 
         with patch("src.storage.read_from_dest.get_partition_path") as mock_path:
             mock_path.return_value = "prefix"
-            result = read_json_from_s3("raw_popular_subreddits")
+            result = read_json_from_s3("raw_subreddits_popular")
 
         # Should return only the valid file
         assert len(result) == 1
@@ -110,7 +110,7 @@ class TestReadJsonFromS3:
         with pytest.raises(StorageError) as exc_info:
             with patch("src.storage.read_from_dest.get_partition_path") as mock_path:
                 mock_path.return_value = "prefix"
-                read_json_from_s3("raw_popular_subreddits")
+                read_json_from_s3("raw_subreddits_popular")
 
         assert "does not exist" in str(exc_info.value)
 
@@ -128,7 +128,7 @@ class TestReadJsonFromS3:
 
         with patch("src.storage.read_from_dest.get_partition_path") as mock_path:
             mock_path.return_value = "prefix/year=2024/month=06/day=15"
-            read_json_from_s3("raw_popular_subreddits", date=custom_date)
+            read_json_from_s3("raw_subreddits_popular", date=custom_date)
 
         mock_path.assert_called_once()
         call_args = mock_path.call_args
@@ -143,7 +143,7 @@ class TestReadParquetFromS3:
 
         with patch("src.storage.read_from_dest.get_partition_path") as mock_path:
             mock_path.return_value = "popular_subreddits/year=2025/month=01/day=07"
-            result = read_parquet_from_s3("cleaned_popular_subreddits")
+            result = read_parquet_from_s3("cleaned_subreddits")
 
         mock_read.assert_called_once()
         s3_url = mock_read.call_args[0][0]
@@ -160,6 +160,6 @@ class TestReadParquetFromS3:
         with pytest.raises(StorageError) as exc_info:
             with patch("src.storage.read_from_dest.get_partition_path") as mock_path:
                 mock_path.return_value = "prefix/year=2025/month=01/day=07"
-                read_parquet_from_s3("cleaned_popular_subreddits")
+                read_parquet_from_s3("cleaned_subreddits")
 
         assert "Failed to read parquet" in str(exc_info.value)
