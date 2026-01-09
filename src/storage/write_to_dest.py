@@ -11,13 +11,12 @@ from src.storage.exceptions import StorageError
 logger = structlog.get_logger().bind(module="storage")
 
 
-def save_json_to_s3(data: SubredditListingResponse, data_type_key: str) -> None:
-    """
-    Save data to S3 in JSON format using Hive-style partitioning.
-    Path: prefix/year=YYYY/month=MM/day=DD/data.json
-    """
+def save_json_to_s3(
+    data: SubredditListingResponse, data_type_key: str, include_hour: bool = False
+) -> None:
+    """Raises StorageError on failure."""
     bucket, prefix = get_data_path(data_type_key)
-    partition_path = get_partition_path(prefix)
+    partition_path = get_partition_path(prefix, include_hour=include_hour)
     region = get_s3_region()
     s3_client = boto3.client("s3", region_name=region)
     key = f"{partition_path}/data.json"
@@ -34,13 +33,14 @@ def save_json_to_s3(data: SubredditListingResponse, data_type_key: str) -> None:
         raise StorageError(f"Failed to save JSON to S3: {bucket}/{key}") from e
 
 
-def save_parquet_to_s3(data: pl.DataFrame | list[dict] | dict, data_type_key: str) -> None:
-    """
-    Save data to S3 in Parquet format using Hive-style partitioning and Polars.
-    Path: prefix/year=YYYY/month=MM/day=DD/data.parquet
-    """
+def save_parquet_to_s3(
+    data: pl.DataFrame | list[dict] | dict,
+    data_type_key: str,
+    include_hour: bool = False,
+) -> None:
+    """Raises StorageError on failure."""
     bucket, prefix = get_data_path(data_type_key)
-    partition_path = get_partition_path(prefix)
+    partition_path = get_partition_path(prefix, include_hour=include_hour)
 
     if not isinstance(data, pl.DataFrame):
         try:

@@ -1,3 +1,5 @@
+from datetime import datetime
+
 import structlog
 
 from src.ingestion.exceptions import IngestionError
@@ -7,80 +9,116 @@ from src.ingestion.fetch_reddit import (
     fetch_popular_subreddits,
     fetch_rising_subreddits,
 )
-from src.transformation import (
-    DataQualityError,
-    TransformationError,
-    clean_multi_source_data,
-)
 from src.models import SourceTag
 from src.storage import (
     StorageError,
-    read_all_subreddit_sources,
+    read_all_silver_sources,
+    read_bronze_source,
     save_json_to_s3,
     save_parquet_to_s3,
 )
+from src.transformation import (
+    DataQualityError,
+    TransformationError,
+    clean_source_data,
+)
+from src.transformation.merge_datasources import merge_silver_sources
 
 logger = structlog.get_logger()
 
+_SOURCE_TO_FETCH_FN = {
+    SourceTag.POPULAR: fetch_popular_subreddits,
+    SourceTag.NEW: fetch_new_subreddits,
+    SourceTag.HOT: fetch_hot_subreddits,
+    SourceTag.RISING: fetch_rising_subreddits,
+}
 
-def create_bronze() -> None:
-    """Fetch from all 4 Reddit sources and save to bronze layer."""
-    log = logger.bind(layer="bronze")
-    log.info("Creating bronze layer from 4 sources")
+_SOURCE_TO_BRONZE_KEY = {
+    SourceTag.POPULAR: "raw_subreddits_popular",
+    SourceTag.NEW: "raw_subreddits_new",
+    SourceTag.HOT: "raw_subreddits_hot",
+    SourceTag.RISING: "raw_subreddits_rising",
+}
 
-    # Map source tag to (fetch_function, data_key)
-    sources = [
-        (SourceTag.POPULAR, fetch_popular_subreddits, "raw_subreddits_popular"),
-        (SourceTag.NEW, fetch_new_subreddits, "raw_subreddits_new"),
-        (SourceTag.HOT, fetch_hot_subreddits, "raw_subreddits_hot"),
-        (SourceTag.RISING, fetch_rising_subreddits, "raw_subreddits_rising"),
-    ]
-
-    for source_tag, fetch_fn, data_key in sources:
-        try:
-            log.info("Fetching source", source=source_tag)
-            raw_data = fetch_fn()
-            save_json_to_s3(raw_data, data_key)
-            log.info("Source saved to bronze", source=source_tag)
-        except IngestionError as e:
-            log.error("Ingestion failed for source", source=source_tag, error=str(e))
-            raise
-        except StorageError as e:
-            log.error("Storage failed for source", source=source_tag, error=str(e))
-            raise
-
-    log.info("Bronze layer created successfully", sources_count=len(sources))
+_SOURCE_TO_SILVER_KEY = {
+    SourceTag.POPULAR: "cleaned_subreddits_popular",
+    SourceTag.NEW: "cleaned_subreddits_new",
+    SourceTag.HOT: "cleaned_subreddits_hot",
+    SourceTag.RISING: "cleaned_subreddits_rising",
+}
 
 
-def create_silver() -> None:
-    """Read all bronze sources, merge with source tagging, save to silver."""
-    log = logger.bind(layer="silver")
-    log.info("Creating silver layer")
+def create_bronze_source(source: SourceTag) -> None:
+    """Fetch single source from Reddit API and save to Bronze with hourly partition."""
+    log = logger.bind(layer="bronze", source=source)
+    log.info("Creating bronze for source")
 
     try:
-        sources_data = read_all_subreddit_sources()
+        fetch_fn = _SOURCE_TO_FETCH_FN[source]
+        data_key = _SOURCE_TO_BRONZE_KEY[source]
 
-        if not sources_data:
-            log.error("No data found in any bronze source")
-            raise StorageError("No bronze data available for transformation")
+        raw_data = fetch_fn()
+        save_json_to_s3(raw_data, data_key, include_hour=True)
+        log.info("Bronze created successfully")
+    except IngestionError as e:
+        log.error("Ingestion failed", error=str(e))
+        raise
+    except StorageError as e:
+        log.error("Storage failed", error=str(e))
+        raise
 
-        clean_data = clean_multi_source_data(sources_data)
-        save_parquet_to_s3(clean_data, "cleaned_subreddits")
+
+def create_silver_source(source: SourceTag) -> None:
+    """Read single Bronze source, clean, and save to Silver with hourly partition."""
+    log = logger.bind(layer="silver", source=source)
+    log.info("Creating silver for source")
+
+    try:
+        bronze_data = read_bronze_source(source, include_hour=True)
+
+        if bronze_data is None:
+            log.error("No bronze data found for source")
+            raise StorageError(f"No bronze data available for {source}")
+
+        clean_data = clean_source_data(bronze_data, source)
+        silver_key = _SOURCE_TO_SILVER_KEY[source]
+        save_parquet_to_s3(clean_data, silver_key, include_hour=True)
+        log.info("Silver created successfully", records=len(clean_data))
+    except StorageError as e:
+        log.error("Storage failed", error=str(e))
+        raise
+    except TransformationError as e:
+        log.error("Transformation failed", error=str(e), step=e.step)
+        raise
+    except DataQualityError as e:
+        log.error("Data quality check failed", error=str(e))
+        raise
+
+
+def create_gold(date: datetime | None = None) -> None:
+    """Read all Silver sources for a day, merge, and save to Gold."""
+    log = logger.bind(layer="gold")
+    log.info("Creating gold layer", date=date)
+
+    try:
+        silver_data = read_all_silver_sources(date=date)
+
+        if not silver_data:
+            log.error("No silver data found for any source")
+            raise StorageError("No silver data available for Gold merge")
+
+        merged_data = merge_silver_sources(silver_data)
+        save_parquet_to_s3(merged_data, "merged_subreddits", include_hour=False)
         log.info(
-            "Silver layer created successfully",
-            records=len(clean_data),
-            sources=list(sources_data.keys()),
+            "Gold created successfully",
+            records=len(merged_data),
+            sources=list(silver_data.keys()),
         )
     except StorageError as e:
         log.error("Storage failed", error=str(e))
         raise
     except TransformationError as e:
-        log.error(
-            "Transformation failed",
-            error=str(e),
-            step=e.step,
-            record_count=e.record_count,
-        )
+        log.error("Transformation failed", error=str(e), step=e.step)
         raise
     except DataQualityError as e:
         log.error("Data quality check failed", error=str(e))
@@ -88,10 +126,16 @@ def create_silver() -> None:
 
 
 def main() -> None:
-    logger.info("reddit-recommendation is running")
-    
-    create_bronze()
-    create_silver()
+    """Run full pipeline: Bronze → Silver for all sources, then Gold merge."""
+    logger.info("reddit-recommendation pipeline starting")
+
+    for source in SourceTag:
+        create_bronze_source(source)
+        create_silver_source(source)
+
+    create_gold()
+
+    logger.info("Pipeline completed successfully")
 
 
 if __name__ == "__main__":

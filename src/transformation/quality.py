@@ -27,10 +27,15 @@ def validate_schema(df: pl.DataFrame, require_sources: bool = False) -> None:
     """
     Validate DataFrame has required columns with correct types.
     Raises DataQualityError if schema is invalid.
+
+    When require_sources=True, expects 'sources' column (list) for Gold data.
+    When require_sources=False, expects 'source' column (string) for Silver data.
     """
     required: SchemaDefinition = dict(REQUIRED_SCHEMA)
     if require_sources:
         required["sources"] = pl.List(pl.String)
+    else:
+        required["source"] = pl.String
 
     missing_cols = set(required.keys()) - set(df.columns)
     if missing_cols:

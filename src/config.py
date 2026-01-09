@@ -59,7 +59,12 @@ def get_data_path(data_type_key: str) -> tuple[str, str]:
     return layer, prefix
 
 
-def get_partition_path(prefix: str, date: datetime | None = None) -> str:
-    """Returns a Hive-style partition path: prefix/year=YYYY/month=MM/day=DD/"""
+def get_partition_path(
+    prefix: str, date: datetime | None = None, include_hour: bool = False
+) -> str:
+    """Returns a Hive-style partition path with optional hour granularity."""
     dt = date or datetime.now(UTC)
-    return f"{prefix}/year={dt.year}/month={dt.month:02d}/day={dt.day:02d}"
+    path = f"{prefix}/year={dt.year}/month={dt.month:02d}/day={dt.day:02d}"
+    if include_hour:
+        path = f"{path}/hour={dt.hour:02d}"
+    return path

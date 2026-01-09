@@ -143,7 +143,7 @@ class TestReadParquetFromS3:
 
         with patch("src.storage.read_from_dest.get_partition_path") as mock_path:
             mock_path.return_value = "popular_subreddits/year=2025/month=01/day=07"
-            result = read_parquet_from_s3("cleaned_subreddits")
+            result = read_parquet_from_s3("cleaned_subreddits_popular")
 
         mock_read.assert_called_once()
         s3_url = mock_read.call_args[0][0]
@@ -160,6 +160,6 @@ class TestReadParquetFromS3:
         with pytest.raises(StorageError) as exc_info:
             with patch("src.storage.read_from_dest.get_partition_path") as mock_path:
                 mock_path.return_value = "prefix/year=2025/month=01/day=07"
-                read_parquet_from_s3("cleaned_subreddits")
+                read_parquet_from_s3("cleaned_subreddits_popular")
 
         assert "Failed to read parquet" in str(exc_info.value)

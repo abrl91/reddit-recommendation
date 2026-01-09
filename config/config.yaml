@@ -3,8 +3,10 @@ s3:
   buckets:
     bronze: "reddit-data-bronze-d271225"
     silver: "reddit-data-silver-d010126"
+    gold: "reddit-data-gold-d090126"
 
 data_paths:
+  # Bronze - raw API responses (one per source)
   raw_subreddits_popular:
     layer: bronze
     prefix: "subreddits/popular"
@@ -18,6 +20,21 @@ data_paths:
     layer: bronze
     prefix: "subreddits/rising"
 
-  cleaned_subreddits:
+  # Silver - cleaned data (one per source, NOT merged)
+  cleaned_subreddits_popular:
     layer: silver
+    prefix: "subreddits/popular"
+  cleaned_subreddits_new:
+    layer: silver
+    prefix: "subreddits/new"
+  cleaned_subreddits_hot:
+    layer: silver
+    prefix: "subreddits/hot"
+  cleaned_subreddits_rising:
+    layer: silver
+    prefix: "subreddits/rising"
+
+  # Gold - merged and deduplicated business data
+  merged_subreddits:
+    layer: gold
     prefix: "subreddits"

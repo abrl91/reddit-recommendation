@@ -11,21 +11,27 @@ from src.storage.exceptions import StorageError
 
 logger = structlog.get_logger().bind(module="storage")
 
-_SOURCE_TO_DATA_KEY: dict[SourceTag, str] = {
+_SOURCE_TO_BRONZE_KEY: dict[SourceTag, str] = {
     SourceTag.POPULAR: "raw_subreddits_popular",
     SourceTag.NEW: "raw_subreddits_new",
     SourceTag.HOT: "raw_subreddits_hot",
     SourceTag.RISING: "raw_subreddits_rising",
 }
 
+_SOURCE_TO_SILVER_KEY: dict[SourceTag, str] = {
+    SourceTag.POPULAR: "cleaned_subreddits_popular",
+    SourceTag.NEW: "cleaned_subreddits_new",
+    SourceTag.HOT: "cleaned_subreddits_hot",
+    SourceTag.RISING: "cleaned_subreddits_rising",
+}
 
-def read_json_from_s3(data_type_key: str, date: datetime | None = None) -> list[SubredditListingResponse]:
-    """
-    Read JSON files from a specific Hive-style partition in S3.
-    If no date is provided, it defaults to the current day's partition.
-    """
+
+def read_json_from_s3(
+    data_type_key: str, date: datetime | None = None, include_hour: bool = False
+) -> list[SubredditListingResponse]:
+    """Raises StorageError on failure."""
     bucket, prefix = get_data_path(data_type_key)
-    partition_path = get_partition_path(prefix, date=date)
+    partition_path = get_partition_path(prefix, date=date, include_hour=include_hour)
     region = get_s3_region()
 
     s3_client = boto3.client("s3", region_name=region)
@@ -66,12 +72,12 @@ def read_json_from_s3(data_type_key: str, date: datetime | None = None) -> list[
     return results
 
 
-def read_parquet_from_s3(data_type_key: str, date: datetime | None = None) -> pl.DataFrame:
-    """
-    Read Parquet files from a specific Hive-style partition in S3 using Polars.
-    """
+def read_parquet_from_s3(
+    data_type_key: str, date: datetime | None = None, include_hour: bool = False
+) -> pl.DataFrame:
+    """Raises StorageError on failure."""
     bucket, prefix = get_data_path(data_type_key)
-    partition_path = get_partition_path(prefix, date=date)
+    partition_path = get_partition_path(prefix, date=date, include_hour=include_hour)
     s3_url = f"s3://{bucket}/{partition_path}/*.parquet"
 
     try:
@@ -85,6 +91,75 @@ def read_parquet_from_s3(data_type_key: str, date: datetime | None = None) -> pl
         raise StorageError(f"Failed to read parquet from {s3_url}: {e}") from e
 
 
+def read_bronze_source(
+    source: SourceTag, date: datetime | None = None, include_hour: bool = False
+) -> SubredditListingResponse | None:
+    """Read a single Bronze source. Returns None if no data found."""
+    data_key = _SOURCE_TO_BRONZE_KEY[source]
+    try:
+        responses = read_json_from_s3(data_key, date=date, include_hour=include_hour)
+        if responses:
+            if len(responses) > 1:
+                logger.warning(
+                    "Multiple files in partition, using first",
+                    source=source,
+                    file_count=len(responses),
+                )
+            return responses[0]
+        logger.warning("No data found for source", source=source)
+        return None
+    except StorageError as e:
+        logger.error("Failed to read source", source=source, error=str(e))
+        return None
+
+
+def read_silver_source(
+    source: SourceTag, date: datetime | None = None, include_hour: bool = False
+) -> pl.DataFrame | None:
+    """Read a single Silver source (cleaned parquet). Returns None if not found."""
+    data_key = _SOURCE_TO_SILVER_KEY[source]
+    try:
+        return read_parquet_from_s3(data_key, date=date, include_hour=include_hour)
+    except StorageError as e:
+        logger.error("Failed to read silver source", source=source, error=str(e))
+        return None
+
+
+def read_all_silver_sources(
+    date: datetime | None = None,
+) -> dict[SourceTag, pl.DataFrame]:
+    """
+    Read all 4 Silver sources for Gold merge.
+    Reads daily partitions (aggregates all hours).
+    Skips sources with no data (logs warning).
+    """
+    results: dict[SourceTag, pl.DataFrame] = {}
+
+    for source, data_key in _SOURCE_TO_SILVER_KEY.items():
+        try:
+            # Read all parquet files in the day partition (all hours)
+            bucket, prefix = get_data_path(data_key)
+            day_path = get_partition_path(prefix, date=date, include_hour=False)
+            s3_url = f"s3://{bucket}/{day_path}/**/*.parquet"
+
+            df = pl.read_parquet(s3_url)
+            results[source] = df
+            logger.info(
+                "Read silver source",
+                source=source,
+                records=len(df),
+            )
+        except Exception as e:
+            logger.warning("No silver data for source", source=source, error=str(e))
+
+    logger.info(
+        "Read silver sources for Gold merge",
+        sources_found=list(results.keys()),
+        sources_missing=[s for s in _SOURCE_TO_SILVER_KEY if s not in results],
+    )
+    return results
+
+
 def read_all_subreddit_sources(
     date: datetime | None = None,
 ) -> dict[SourceTag, SubredditListingResponse]:
@@ -95,7 +170,7 @@ def read_all_subreddit_sources(
     """
     results: dict[SourceTag, SubredditListingResponse] = {}
 
-    for source, data_key in _SOURCE_TO_DATA_KEY.items():
+    for source, data_key in _SOURCE_TO_BRONZE_KEY.items():
         try:
             responses = read_json_from_s3(data_key, date=date)
             if responses:
@@ -116,7 +191,7 @@ def read_all_subreddit_sources(
     logger.info(
         "Read subreddit sources from bronze",
         sources_found=list(results.keys()),
-        sources_missing=[s for s in _SOURCE_TO_DATA_KEY if s not in results],
+        sources_missing=[s for s in _SOURCE_TO_BRONZE_KEY if s not in results],
     )
 
     return results

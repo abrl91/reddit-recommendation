@@ -5,7 +5,7 @@ import structlog
 
 from src.models import SourceTag, SubredditListingResponse
 from src.transformation.context import pipeline_step
-from src.transformation.prepare import merge_sources
+from src.transformation.prepare import _extract_with_source, merge_sources
 from src.transformation.quality import validate_and_clean
 
 logger = structlog.get_logger().bind(module="transform")
@@ -71,6 +71,62 @@ def _fill_nulls(df: pl.DataFrame) -> pl.DataFrame:
     if "sources" in df.columns:
         fills.append(pl.col("sources").fill_null([]))
     return df.with_columns(fills)
+
+
+def clean_source_data(
+    response: SubredditListingResponse, source: SourceTag
+) -> pl.DataFrame:
+    """
+    Transform a single source into clean Silver data.
+    No merging or deduplication - just extraction and cleaning.
+    """
+    logger.info("Starting single-source transformation", source=source)
+
+    with pipeline_step("extract", record_count=1):
+        df = _extract_with_source(response, source)
+
+    if df.is_empty():
+        logger.warning("No records extracted from source", source=source)
+        return df
+
+    record_count = len(df)
+    logger.info("Extraction complete", records=record_count)
+
+    with pipeline_step("normalize_urls", record_count):
+        df = df.pipe(_normalize_urls)
+
+    with pipeline_step("convert_timestamps", record_count):
+        df = df.pipe(_convert_timestamps)
+
+    with pipeline_step("add_metadata", record_count):
+        df = df.pipe(_add_metadata)
+
+    with pipeline_step("log_null_stats", record_count):
+        df = df.pipe(_log_null_stats)
+
+    with pipeline_step("fill_nulls_single_source", record_count):
+        df = df.with_columns([
+            pl.col("subreddit_name").fill_null(""),
+            pl.col("title").fill_null(""),
+            pl.col("description").fill_null(""),
+            pl.col("subscribers").fill_null(0),
+            pl.col("is_nsfw").fill_null(False),
+            pl.col("url").fill_null(""),
+            pl.col("created_date").fill_null(""),
+        ])
+
+    with pipeline_step("validate_and_clean", record_count):
+        df = validate_and_clean(df, require_sources=False)
+
+    final_count = len(df)
+    logger.info(
+        "Single-source transformation complete",
+        source=source,
+        output_records=final_count,
+        dropped_records=record_count - final_count,
+    )
+
+    return df
 
 
 def clean_multi_source_data(

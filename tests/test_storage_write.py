@@ -71,7 +71,7 @@ class TestSaveParquetToS3:
 
         with patch("src.storage.write_to_dest.get_partition_path") as mock_path:
             mock_path.return_value = "popular_subreddits/year=2025/month=01/day=07"
-            save_parquet_to_s3(df, "cleaned_subreddits")
+            save_parquet_to_s3(df, "cleaned_subreddits_popular")
 
         mock_write.assert_called_once()
         s3_path = mock_write.call_args[0][0]
@@ -88,7 +88,7 @@ class TestSaveParquetToS3:
 
         with patch("src.storage.write_to_dest.get_partition_path") as mock_path:
             mock_path.return_value = "prefix/year=2025/month=01/day=07"
-            save_parquet_to_s3(data, "cleaned_subreddits")
+            save_parquet_to_s3(data, "cleaned_subreddits_popular")
 
         mock_write.assert_called_once()
 
@@ -105,6 +105,6 @@ class TestSaveParquetToS3:
         with pytest.raises(StorageError) as exc_info:
             with patch("src.storage.write_to_dest.get_partition_path") as mock_path:
                 mock_path.return_value = "prefix/year=2025/month=01/day=07"
-                save_parquet_to_s3(df, "cleaned_subreddits")
+                save_parquet_to_s3(df, "cleaned_subreddits_popular")
 
         assert "Failed to save parquet" in str(exc_info.value)
