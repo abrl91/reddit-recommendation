@@ -1,4 +1,14 @@
+from enum import Enum
 from typing import TypedDict
+
+
+class SourceTag(str, Enum):
+    """Source tags for subreddit data origin."""
+
+    POPULAR = "popular"
+    NEW = "new"
+    HOT = "hot"
+    RISING = "rising"
 
 
 class SubredditData(TypedDict, total=False):

@@ -113,6 +113,25 @@ A Reddit content recommendation system that learns user preferences without requ
 - Handles rate limiting and errors
 - Saves raw data to S3 bronze layer
 
+**Reddit API Endpoints:**
+
+| Endpoint | Returns | Use Case |
+|----------|---------|----------|
+| `/subreddits/popular.json` | Top by subscribers (stable) | Static "hall of fame" baseline |
+| `/subreddits/new.json` | Newly created subreddits | Discovering emerging communities |
+| `/r/popular/hot.json?sr_detail=true` | Hot posts with embedded subreddit data | Subreddits with trending content |
+| `/r/popular/rising.json?sr_detail=true` | Rising posts with embedded subreddit data | Subreddits gaining momentum |
+
+**Strategy:** Four independent sources, merged in transformation with source tagging:
+1. **Popular** (`@daily`) - stable baseline, high subscriber count
+2. **New** (`@daily`) - freshly created communities
+3. **Hot** (`@hourly`) - subreddits with trending content right now
+4. **Rising** (`@2hours`) - subreddits with content gaining momentum
+
+**Architecture:** Each source saved separately in bronze layer → transformation merges with source tags → silver layer output. This enables independent scheduling and fault isolation.
+
+Each subreddit gets tagged with its source(s): `["popular"]`, `["new"]`, `["hot"]`, `["rising"]`, or combinations like `["popular", "hot", "rising"]`.
+
 **2. Data Processing Service**
 
 - Reads bronze layer JSON
@@ -199,9 +218,16 @@ Next Milestone
 - Single Python script (`fetch_reddit.py`)
 - Hardcode AWS credentials (we'll fix in cleanup)
 - Hit Reddit API without authentication (public endpoint)
-- Get top 25 trending subreddits
-- Save as ONE JSON file to S3 with timestamp in filename
-- Example filename: `subreddits_2025-12-20_14-30-00.json`
+- Fetch subreddits from 4 independent sources, save each separately to bronze:
+  - `/subreddits/popular.json` → `bronze/subreddits/popular/`
+  - `/subreddits/new.json` → `bronze/subreddits/new/`
+  - `/r/popular/hot.json?sr_detail=true` → `bronze/subreddits/hot/`
+  - `/r/popular/rising.json?sr_detail=true` → `bronze/subreddits/rising/`
+- Use `sr_detail=true` to get subreddit metadata inline (avoids N+1 API calls)
+- Fetch top posts from each subreddit via `/r/{subreddit}/hot.json`
+- Save each source as separate JSON file to S3
+
+> **Note:** Source tagging happens in transformation (silver layer), not ingestion. Each subreddit gets tagged with its source(s) for UI badges.
 
 **Code structure:**
 
@@ -403,6 +429,7 @@ fetch >> transform
 - Structure: `user_id, subreddit_name, rating, timestamp`
 - Example path: `s3://reddit-data-gold/ratings/user_ratings.parquet`
 - Single user only (hardcoded user_id = 'user1')
+- maybe ask user what he likes, like in content websites
 
 **Code structure:**
 
@@ -730,6 +757,8 @@ from groq import Groq
         - Processing pipeline health
         - Record count validation (bronze vs silver layer counts)
         - Data quality report (CSV/JSON summary per run)
+        - Anomaly detection: Alert when source returns unusual data volumes (e.g., 2 subreddits instead of ~25)
+        - Cross-source validation: Stats about overlap between sources (e.g., "15% of subreddits appear in 3+ sources")
 
 **Deliverables:**
 

@@ -5,9 +5,27 @@ s3:
     silver: "reddit-data-silver-d010126"
 
 data_paths:
-  raw_popular_subreddits:
+  raw_subreddits_popular:
     layer: bronze
-    prefix: "popular_subreddits"
-  cleaned_popular_subreddits:
+    prefix: "subreddits/popular"
+  raw_subreddits_new:
+    layer: bronze
+    prefix: "subreddits/new"
+  raw_subreddits_hot:
+    layer: bronze
+    prefix: "subreddits/hot"
+  raw_subreddits_rising:
+    layer: bronze
+    prefix: "subreddits/rising"
+
+  cleaned_subreddits:
     layer: silver
-    prefix: "popular_subreddits"
+    prefix: "subreddits"
+
+  # DEPRECATED - keep for backward compatibility during transition
+  # raw_popular_subreddits:
+  #   layer: bronze
+  #   prefix: "popular_subreddits"
+  # cleaned_popular_subreddits:
+  #   layer: silver
+  #   prefix: "popular_subreddits"

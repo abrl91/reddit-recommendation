@@ -1,4 +1,5 @@
 from src.models.reddit import (
+    SourceTag,
     SubredditChild,
     SubredditData,
     SubredditListingData,
@@ -6,6 +7,7 @@ from src.models.reddit import (
 )
 
 __all__ = [
+    "SourceTag",
     "SubredditChild",
     "SubredditData",
     "SubredditListingData",

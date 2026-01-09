@@ -6,10 +6,17 @@ import polars as pl
 import structlog
 
 from src.config import get_data_path, get_partition_path, get_s3_region
-from src.models import SubredditListingResponse
+from src.models import SourceTag, SubredditListingResponse
 from src.storage.exceptions import StorageError
 
 logger = structlog.get_logger().bind(module="storage")
+
+_SOURCE_TO_DATA_KEY: dict[SourceTag, str] = {
+    SourceTag.POPULAR: "raw_subreddits_popular",
+    SourceTag.NEW: "raw_subreddits_new",
+    SourceTag.HOT: "raw_subreddits_hot",
+    SourceTag.RISING: "raw_subreddits_rising",
+}
 
 
 def read_json_from_s3(data_type_key: str, date: datetime | None = None) -> list[SubredditListingResponse]:
@@ -76,3 +83,40 @@ def read_parquet_from_s3(data_type_key: str, date: datetime | None = None) -> pl
         logger.error("Failed to read parquet from S3",
                      url=s3_url, error=str(e))
         raise StorageError(f"Failed to read parquet from {s3_url}: {e}") from e
+
+
+def read_all_subreddit_sources(
+    date: datetime | None = None,
+) -> dict[SourceTag, SubredditListingResponse]:
+    """
+    Read all 4 subreddit sources from bronze layer.
+    Returns dict mapping source tag to response, ready for clean_multi_source_data().
+    Skips sources with no data (logs warning).
+    """
+    results: dict[SourceTag, SubredditListingResponse] = {}
+
+    for source, data_key in _SOURCE_TO_DATA_KEY.items():
+        try:
+            responses = read_json_from_s3(data_key, date=date)
+            if responses:
+                # Take first response (each source should have 1 file per partition)
+                results[source] = responses[0]
+                if len(responses) > 1:
+                    logger.warning(
+                        "Multiple files in partition, using first",
+                        source=source,
+                        file_count=len(responses),
+                    )
+            else:
+                logger.warning("No data found for source", source=source)
+        except StorageError as e:
+            logger.error("Failed to read source", source=source, error=str(e))
+            # Continue with other sources - don't fail entire pipeline
+
+    logger.info(
+        "Read subreddit sources from bronze",
+        sources_found=list(results.keys()),
+        sources_missing=[s for s in _SOURCE_TO_DATA_KEY if s not in results],
+    )
+
+    return results
