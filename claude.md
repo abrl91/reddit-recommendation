@@ -115,15 +115,15 @@ def get_config() -> Config:
 ```python
 # Good
 try:
-    response = requests.get(url, timeout=30)
+    response = httpx.get(url, timeout=30)
     response.raise_for_status()
-except requests.RequestException as e:
+except httpx.HTTPError as e:
     logger.error("Reddit API request failed", url=url, error=str(e))
-    raise RedditAPIError(f"Failed to fetch from {url}") from e
+    raise IngestionError(f"Failed to fetch from {url}") from e
 
 # Bad
 try:
-    response = requests.get(url)
+    response = httpx.get(url)
 except:
     print("error")
 ```
@@ -187,13 +187,13 @@ ruff format src/
 # Run tests
 pytest tests/
 
-# Run a specific script
-python -m src.data_ingestion.fetch_reddit
+# Run full pipeline manually
+python -m src
 ```
 
 ## Current Milestone
 
-**M1 and M2 complete** (except unit tests). Next: M3 (Airflow Orchestration) or add tests first.
+**M1, M2, M3.1 complete**. Next: M3.2 (Airflow cleanup - alerting) or M4 (User Feedback CLI).
 
 ## Notes for Claude
 

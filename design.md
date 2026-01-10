@@ -263,16 +263,28 @@ BUCKET_NAME = "reddit-data-bronze"
 - Add error handling with try/except blocks
 - Add proper logging instead of print statements
 - Create basic folder structure:
-    
+
     ```
     reddit-recommender/
     ├── src/
-    │   └── data_ingestion/
-    │       └── fetch_reddit.py
+    │   ├── __main__.py
+    │   ├── config.py
+    │   ├── ingestion/
+    │   │   └── fetch_reddit.py
+    │   ├── storage/
+    │   │   ├── read.py
+    │   │   └── write.py
+    │   ├── transformation/
+    │   │   └── transform.py
+    │   └── models/
+    │       └── reddit.py
     ├── config/
     │   └── config.yaml
-    └── requirements.txt
-    
+    ├── airflow/
+    │   └── dags/
+    │       └── pipeline.py
+    └── pyproject.toml
+
     ```
     
 - Add configuration file for API endpoints and S3 paths
@@ -358,55 +370,82 @@ import boto3
 **What to build:**
 
 - Local Airflow setup using docker-compose
-- Single DAG with 2 tasks:
-    1. `fetch_reddit_task`: Run M1 script
-    2. `transform_reddit_task`: Run M2 script
-- Set dependency: transform depends on fetch
-- Manual trigger only (no schedule yet)
-- DAG runs on-demand when you click "trigger" in UI
+- 5 DAGs using TaskFlow API and Dataset triggers:
+    - 4 Source DAGs (popular, new, hot, rising): `bronze()` → `silver()` tasks
+    - 1 Gold DAG: Triggered when ALL silver datasets are updated
+- Per-source scheduling:
+    - Popular/New: Daily at 6 AM UTC
+    - Hot: Hourly
+    - Rising: Every 2 hours
+- Event-driven Gold merge via Airflow Datasets (no polling)
+
+**Architecture:**
+
+```
+    popular_dag ──► silver_popular_dataset ──┐
+    new_dag ──────► silver_new_dataset ──────┼──► gold_dag (when ALL 4 updated)
+    hot_dag ──────► silver_hot_dataset ──────┤
+    rising_dag ───► silver_rising_dataset ───┘
+```
 
 **Code structure:**
 
 ```python
-# airflow/dags/reddit_pipeline.py
-from airflow import DAG
-from airflow.operators.bash import BashOperator
-from datetime import datetime
+# airflow/dags/pipeline.py
+from airflow.datasets import Dataset
+from airflow.decorators import dag, task
 
-dag = DAG('reddit_pipeline', start_date=datetime(2025, 1, 1))
+SILVER_POPULAR_DATASET = Dataset("s3://reddit-data-silver/subreddits/popular")
+# ... other datasets
 
-fetch = BashOperator(task_id='fetch', bash_command='python src/data_ingestion/fetch_reddit.py', dag=dag)
-transform = BashOperator(task_id='transform', bash_command='python src/transform_reddit.py', dag=dag)
+def create_source_dag(source: SourceTag, schedule: str, outlet_dataset: Dataset):
+    @dag(dag_id=f"reddit_{source.value}_pipeline", schedule=schedule, ...)
+    def source_pipeline():
+        @task
+        def bronze():
+            create_bronze_source(source)
 
-fetch >> transform
+        @task(outlets=[outlet_dataset])
+        def silver():
+            create_silver_source(source)
+
+        bronze() >> silver()
+    return source_pipeline()
+
+@dag(schedule=ALL_SILVER_DATASETS)  # Triggers when ALL datasets updated
+def reddit_gold_pipeline():
+    @task
+    def merge_to_gold():
+        create_gold()
+    merge_to_gold()
 
 ```
 
 **Success Criteria:**
 
 - ✓ Airflow UI accessible at localhost:8080
-- ✓ DAG appears in UI
-- ✓ You can manually trigger the DAG
-- ✓ Both tasks complete successfully (green in UI)
-- ✓ Data appears in S3 after DAG completes
+- ✓ All 5 DAGs appear in UI
+- ✓ Source DAGs can be triggered manually or run on schedule
+- ✓ Gold DAG triggers automatically when all Silver datasets complete
+- ✓ Data appears in S3 after DAGs complete
 
 ### M3.2 - Cleanup
 
 **What to improve:**
 
-- Add daily scheduling: `schedule_interval='@daily'` or `'0 9 * * *'` (9 AM daily)
-- Add retry logic: `retries=3, retry_delay=timedelta(minutes=5)`
+- ~~Add scheduling~~ ✓ (done in M3.1 - per-source schedules)
+- ~~Add retry logic~~ ✓ (done: `retries=2, retry_delay=5min`)
+- ~~Separate DAG definition from business logic~~ ✓ (done: TaskFlow API + src functions)
+- ~~Add sensors~~ → Replaced with Dataset triggers (better approach)
 - Add email/Slack alerting on failure
-- Separate DAG definition from business logic (use PythonOperator instead of BashOperator)
-- Add sensors to check if new data is available before processing
 - Add task documentation and default_args
-- Improve task dependencies with proper error handling
+- Add monitoring dashboard (Airflow metrics)
 
 **Success Criteria:**
 
-- ✓ DAG runs automatically every day at scheduled time
+- ✓ DAGs run automatically at scheduled times
 - ✓ Failed tasks retry automatically
-- ✓ You get notified if DAG fails after retries
+- You get notified if DAG fails after retries
 - ✓ Code is clean and maintainable
 
 ---
