@@ -11,6 +11,8 @@ from src.ingestion.fetch_reddit import (
 )
 from src.models import SourceTag
 from src.storage import (
+    SOURCE_TO_BRONZE_KEY,
+    SOURCE_TO_SILVER_KEY,
     StorageError,
     read_all_silver_sources,
     read_bronze_source,
@@ -33,20 +35,6 @@ _SOURCE_TO_FETCH_FN = {
     SourceTag.RISING: fetch_rising_subreddits,
 }
 
-_SOURCE_TO_BRONZE_KEY = {
-    SourceTag.POPULAR: "raw_subreddits_popular",
-    SourceTag.NEW: "raw_subreddits_new",
-    SourceTag.HOT: "raw_subreddits_hot",
-    SourceTag.RISING: "raw_subreddits_rising",
-}
-
-_SOURCE_TO_SILVER_KEY = {
-    SourceTag.POPULAR: "cleaned_subreddits_popular",
-    SourceTag.NEW: "cleaned_subreddits_new",
-    SourceTag.HOT: "cleaned_subreddits_hot",
-    SourceTag.RISING: "cleaned_subreddits_rising",
-}
-
 
 def create_bronze_source(source: SourceTag) -> None:
     """Fetch single source from Reddit API and save to Bronze with hourly partition."""
@@ -55,7 +43,7 @@ def create_bronze_source(source: SourceTag) -> None:
 
     try:
         fetch_fn = _SOURCE_TO_FETCH_FN[source]
-        data_key = _SOURCE_TO_BRONZE_KEY[source]
+        data_key = SOURCE_TO_BRONZE_KEY[source]
 
         raw_data = fetch_fn()
         save_json_to_s3(raw_data, data_key, include_hour=True)
@@ -81,7 +69,7 @@ def create_silver_source(source: SourceTag) -> None:
             raise StorageError(f"No bronze data available for {source}")
 
         clean_data = clean_source_data(bronze_data, source)
-        silver_key = _SOURCE_TO_SILVER_KEY[source]
+        silver_key = SOURCE_TO_SILVER_KEY[source]
         save_parquet_to_s3(clean_data, silver_key, include_hour=True)
         log.info("Silver created successfully", records=len(clean_data))
     except StorageError as e:
@@ -108,7 +96,8 @@ def create_gold(date: datetime | None = None) -> None:
             raise StorageError("No silver data available for Gold merge")
 
         merged_data = merge_silver_sources(silver_data)
-        save_parquet_to_s3(merged_data, "merged_subreddits", include_hour=False)
+        save_parquet_to_s3(merged_data, "merged_subreddits",
+                           include_hour=False)
         log.info(
             "Gold created successfully",
             records=len(merged_data),

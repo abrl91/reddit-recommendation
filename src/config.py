@@ -54,9 +54,9 @@ def get_data_path(data_type_key: str) -> tuple[str, str]:
     """Returns (bucket_name, prefix). Raises KeyError if data_type not found."""
     config = get_config()
     data_config = config["data_paths"][data_type_key]
-    layer = get_s3_bucket(data_config["layer"])
+    bucket = get_s3_bucket(data_config["layer"])
     prefix = data_config["prefix"]
-    return layer, prefix
+    return bucket, prefix
 
 
 def get_partition_path(

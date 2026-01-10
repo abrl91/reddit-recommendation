@@ -7,7 +7,7 @@ import pytest
 from botocore.exceptions import ClientError
 
 from src.storage.exceptions import StorageError
-from src.storage.write_to_dest import save_json_to_s3, save_parquet_to_s3
+from src.storage.write import save_json_to_s3, save_parquet_to_s3
 
 
 class TestSaveJsonToS3:
@@ -18,7 +18,7 @@ class TestSaveJsonToS3:
 
         data = {"kind": "Listing", "data": {"children": []}}
 
-        with patch("src.storage.write_to_dest.get_partition_path") as mock_path:
+        with patch("src.storage.write.get_partition_path") as mock_path:
             mock_path.return_value = "popular_subreddits/year=2025/month=01/day=07"
             save_json_to_s3(data, "raw_subreddits_popular")
 
@@ -35,7 +35,7 @@ class TestSaveJsonToS3:
 
         data = {"kind": "Listing", "data": {"children": []}}
 
-        with patch("src.storage.write_to_dest.get_partition_path") as mock_path:
+        with patch("src.storage.write.get_partition_path") as mock_path:
             mock_path.return_value = "prefix/year=2025/month=01/day=07"
             save_json_to_s3(data, "raw_subreddits_popular")
 
@@ -55,7 +55,7 @@ class TestSaveJsonToS3:
         mocker.patch("boto3.client", return_value=mock_client)
 
         with pytest.raises(StorageError) as exc_info:
-            with patch("src.storage.write_to_dest.get_partition_path") as mock_path:
+            with patch("src.storage.write.get_partition_path") as mock_path:
                 mock_path.return_value = "prefix/year=2025/month=01/day=07"
                 save_json_to_s3({"data": "test"}, "raw_subreddits_popular")
 
@@ -69,7 +69,7 @@ class TestSaveParquetToS3:
 
         df = pl.DataFrame({"col1": [1, 2, 3]})
 
-        with patch("src.storage.write_to_dest.get_partition_path") as mock_path:
+        with patch("src.storage.write.get_partition_path") as mock_path:
             mock_path.return_value = "popular_subreddits/year=2025/month=01/day=07"
             save_parquet_to_s3(df, "cleaned_subreddits_popular")
 
@@ -86,7 +86,7 @@ class TestSaveParquetToS3:
 
         data = [{"name": "test1"}, {"name": "test2"}]
 
-        with patch("src.storage.write_to_dest.get_partition_path") as mock_path:
+        with patch("src.storage.write.get_partition_path") as mock_path:
             mock_path.return_value = "prefix/year=2025/month=01/day=07"
             save_parquet_to_s3(data, "cleaned_subreddits_popular")
 
@@ -103,7 +103,7 @@ class TestSaveParquetToS3:
         df = pl.DataFrame({"col1": [1, 2, 3]})
 
         with pytest.raises(StorageError) as exc_info:
-            with patch("src.storage.write_to_dest.get_partition_path") as mock_path:
+            with patch("src.storage.write.get_partition_path") as mock_path:
                 mock_path.return_value = "prefix/year=2025/month=01/day=07"
                 save_parquet_to_s3(df, "cleaned_subreddits_popular")
 

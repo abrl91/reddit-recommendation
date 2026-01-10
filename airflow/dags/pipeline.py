@@ -61,7 +61,7 @@ def create_source_dag(
         dag_id=f"reddit_{source.value}_pipeline",
         description=f"Fetch {source.value} subreddits: Bronze → Silver",
         schedule=schedule,
-        start_date=datetime(2025, 1, 1),
+        start_date=datetime(2026, 1, 1),
         catchup=False,
         default_args=DEFAULT_ARGS,
         tags=["reddit", "etl", source.value],
@@ -120,7 +120,7 @@ reddit_rising_dag = create_source_dag(
     dag_id="reddit_gold_pipeline",
     description="Merge all Silver sources into Gold layer",
     schedule=ALL_SILVER_DATASETS,  # Triggers when ALL 4 datasets are updated
-    start_date=datetime(2025, 1, 1),
+    start_date=datetime(2026, 1, 1),
     catchup=False,
     default_args=DEFAULT_ARGS,
     tags=["reddit", "etl", "gold"],

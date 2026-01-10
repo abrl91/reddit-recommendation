@@ -7,7 +7,7 @@ import polars as pl
 import pytest
 
 from src.storage.exceptions import StorageError
-from src.storage.read_from_dest import read_json_from_s3, read_parquet_from_s3
+from src.storage.read import read_json_from_s3, read_parquet_from_s3
 
 
 class TestReadJsonFromS3:
@@ -38,7 +38,7 @@ class TestReadJsonFromS3:
 
         mocker.patch("boto3.client", return_value=mock_client)
 
-        with patch("src.storage.read_from_dest.get_partition_path") as mock_path:
+        with patch("src.storage.read.get_partition_path") as mock_path:
             mock_path.return_value = "prefix/year=2025/month=01/day=07"
             result = read_json_from_s3("raw_subreddits_popular")
 
@@ -56,7 +56,7 @@ class TestReadJsonFromS3:
 
         mocker.patch("boto3.client", return_value=mock_client)
 
-        with patch("src.storage.read_from_dest.get_partition_path") as mock_path:
+        with patch("src.storage.read.get_partition_path") as mock_path:
             mock_path.return_value = "prefix/year=2025/month=01/day=07"
             result = read_json_from_s3("raw_subreddits_popular")
 
@@ -86,7 +86,7 @@ class TestReadJsonFromS3:
 
         mocker.patch("boto3.client", return_value=mock_client)
 
-        with patch("src.storage.read_from_dest.get_partition_path") as mock_path:
+        with patch("src.storage.read.get_partition_path") as mock_path:
             mock_path.return_value = "prefix"
             result = read_json_from_s3("raw_subreddits_popular")
 
@@ -108,7 +108,7 @@ class TestReadJsonFromS3:
         mocker.patch("boto3.client", return_value=mock_client)
 
         with pytest.raises(StorageError) as exc_info:
-            with patch("src.storage.read_from_dest.get_partition_path") as mock_path:
+            with patch("src.storage.read.get_partition_path") as mock_path:
                 mock_path.return_value = "prefix"
                 read_json_from_s3("raw_subreddits_popular")
 
@@ -126,7 +126,7 @@ class TestReadJsonFromS3:
 
         custom_date = datetime(2024, 6, 15, tzinfo=UTC)
 
-        with patch("src.storage.read_from_dest.get_partition_path") as mock_path:
+        with patch("src.storage.read.get_partition_path") as mock_path:
             mock_path.return_value = "prefix/year=2024/month=06/day=15"
             read_json_from_s3("raw_subreddits_popular", date=custom_date)
 
@@ -141,7 +141,7 @@ class TestReadParquetFromS3:
         mock_df = pl.DataFrame({"col1": [1, 2, 3]})
         mock_read = mocker.patch("polars.read_parquet", return_value=mock_df)
 
-        with patch("src.storage.read_from_dest.get_partition_path") as mock_path:
+        with patch("src.storage.read.get_partition_path") as mock_path:
             mock_path.return_value = "popular_subreddits/year=2025/month=01/day=07"
             result = read_parquet_from_s3("cleaned_subreddits_popular")
 
@@ -153,12 +153,24 @@ class TestReadParquetFromS3:
         assert s3_url.endswith("/*.parquet")
         assert len(result) == 3
 
+    def test_recursive_uses_double_star_glob(self, mocker: Any) -> None:
+        """recursive=True should use **/*.parquet to read all subdirectories."""
+        mock_df = pl.DataFrame({"col1": [1, 2, 3]})
+        mock_read = mocker.patch("polars.read_parquet", return_value=mock_df)
+
+        with patch("src.storage.read.get_partition_path") as mock_path:
+            mock_path.return_value = "popular_subreddits/year=2025/month=01/day=07"
+            read_parquet_from_s3("cleaned_subreddits_popular", recursive=True)
+
+        s3_url = mock_read.call_args[0][0]
+        assert s3_url.endswith("/**/*.parquet")
+
     def test_read_error_raises_storage_error(self, mocker: Any) -> None:
         """Parquet read errors should be wrapped in StorageError."""
         mocker.patch("polars.read_parquet", side_effect=Exception("File not found"))
 
         with pytest.raises(StorageError) as exc_info:
-            with patch("src.storage.read_from_dest.get_partition_path") as mock_path:
+            with patch("src.storage.read.get_partition_path") as mock_path:
                 mock_path.return_value = "prefix/year=2025/month=01/day=07"
                 read_parquet_from_s3("cleaned_subreddits_popular")
 

@@ -1,11 +1,11 @@
 import polars as pl
 
-from src.transformation.transform_reddit import (
+from src.transformation.transform import (
     _convert_timestamps,
-    _fill_nulls,
-    _normalize_urls,
+    fill_nulls,
+    normalize_urls,
 )
-from src.transformation.prepare import _extract_to_dataframe
+from src.transformation.prepare import extract_to_dataframe
 from src.models.reddit import SubredditData
 
 
@@ -24,7 +24,7 @@ class TestExtractToDataframe:
             }
         ]
 
-        result = _extract_to_dataframe(records)
+        result = extract_to_dataframe(records)
 
         assert len(result) == 1
         assert result["subreddit_name"][0] == "Python"
@@ -34,7 +34,7 @@ class TestExtractToDataframe:
 
     def test_empty_list_returns_empty_dataframe_with_schema(self) -> None:
         """Empty input should return empty DataFrame with correct columns."""
-        result = _extract_to_dataframe([])
+        result = extract_to_dataframe([])
 
         assert result.is_empty()
         expected_columns = {
@@ -58,7 +58,7 @@ class TestExtractToDataframe:
             },
         ]
 
-        result = _extract_to_dataframe(records)
+        result = extract_to_dataframe(records)
 
         assert len(result) == 2
         names = result["subreddit_name"].to_list()
@@ -75,7 +75,7 @@ class TestExtractToDataframe:
             }
         ]
 
-        result = _extract_to_dataframe(records)
+        result = extract_to_dataframe(records)
 
         assert len(result) == 1
         assert result["subreddit_name"][0] == "test"
@@ -87,14 +87,14 @@ class TestNormalizeUrls:
     def test_prepends_reddit_domain_to_relative_url(self) -> None:
         """Relative URLs should get reddit.com prepended."""
         df = pl.DataFrame({"url": ["/r/Python/"]})
-        result = _normalize_urls(df)
+        result = normalize_urls(df)
 
         assert result["url"][0] == "https://reddit.com/r/Python/"
 
     def test_does_not_modify_absolute_url(self) -> None:
         """URLs already starting with http should NOT be modified."""
         df = pl.DataFrame({"url": ["https://reddit.com/r/Python/"]})
-        result = _normalize_urls(df)
+        result = normalize_urls(df)
 
         assert result["url"][0] == "https://reddit.com/r/Python/"
         assert "https://reddit.comhttps://" not in result["url"][0]
@@ -102,7 +102,7 @@ class TestNormalizeUrls:
     def test_handles_empty_url(self) -> None:
         """Empty URL should get domain prepended (results in just the domain)."""
         df = pl.DataFrame({"url": [""]})
-        result = _normalize_urls(df)
+        result = normalize_urls(df)
 
         assert result["url"][0] == "https://reddit.com"
 
@@ -118,7 +118,8 @@ class TestConvertTimestamps:
 
     def test_handles_null_timestamp(self) -> None:
         """Null timestamp should remain null after conversion."""
-        df = pl.DataFrame({"created_date": [None]}, schema={"created_date": pl.Float64})
+        df = pl.DataFrame({"created_date": [None]}, schema={
+                          "created_date": pl.Float64})
         result = _convert_timestamps(df)
 
         assert result["created_date"][0] is None
@@ -145,7 +146,7 @@ class TestFillNulls:
             "created_date": pl.String,
         })
 
-        result = _fill_nulls(df)
+        result = fill_nulls(df)
 
         assert result["subreddit_name"][0] == ""
         assert result["title"][0] == ""
@@ -167,7 +168,7 @@ class TestFillNulls:
             "created_date": ["2009-02-13"],
         })
 
-        result = _fill_nulls(df)
+        result = fill_nulls(df)
 
         assert result["subreddit_name"][0] == "Python"
         assert result["subscribers"][0] == 1500000
@@ -195,6 +196,6 @@ class TestFillNulls:
             "sources": pl.List(pl.String),
         })
 
-        result = _fill_nulls(df)
+        result = fill_nulls(df)
 
         assert result["sources"][0].to_list() == []

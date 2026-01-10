@@ -14,3 +14,10 @@ class TransformationError(Exception):
         if self.record_count is not None:
             parts.append(f"records={self.record_count}")
         return " | ".join(parts)
+
+
+class DataQualityError(TransformationError):
+    """Raised when data fails critical quality checks (missing columns, type mismatches)."""
+
+    def __init__(self, message: str):
+        super().__init__(message, step="data_quality")

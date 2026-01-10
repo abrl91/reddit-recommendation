@@ -3,6 +3,8 @@ from typing import Any
 import polars as pl
 import structlog
 
+from src.transformation.exceptions import DataQualityError
+
 logger = structlog.get_logger().bind(module="quality")
 
 SchemaDefinition = dict[str, Any]
@@ -17,10 +19,6 @@ REQUIRED_SCHEMA: SchemaDefinition = {
     "created_date": pl.String,
     "processed_at": pl.String,
 }
-
-
-class DataQualityError(Exception):
-    """Raised when data fails critical quality checks."""
 
 
 def validate_schema(df: pl.DataFrame, require_sources: bool = False) -> None:
