@@ -1,5 +1,5 @@
 """
-Reddit Data Pipeline DAGs - Medallion Architecture
+Reddit Data Pipeline DAGs
 
 5 DAGs using Airflow Datasets for event-driven orchestration:
 - 4 Source DAGs: Fetch from Reddit API → Bronze → Silver (each produces a Dataset)
@@ -20,10 +20,6 @@ from airflow.decorators import dag, task
 from src import create_bronze_source, create_gold, create_silver_source
 from src.models import SourceTag
 
-# ---------------------------------------------------------------------------
-# Dataset Definitions
-# URIs are logical identifiers - Airflow doesn't access them, just tracks updates
-# ---------------------------------------------------------------------------
 SILVER_POPULAR_DATASET = Dataset("s3://reddit-data-silver/subreddits/popular")
 SILVER_NEW_DATASET = Dataset("s3://reddit-data-silver/subreddits/new")
 SILVER_HOT_DATASET = Dataset("s3://reddit-data-silver/subreddits/hot")
@@ -36,9 +32,6 @@ ALL_SILVER_DATASETS = [
     SILVER_RISING_DATASET,
 ]
 
-# ---------------------------------------------------------------------------
-# Default Arguments
-# ---------------------------------------------------------------------------
 DEFAULT_ARGS = {
     "owner": "airflow",
     "retries": 2,
@@ -46,35 +39,27 @@ DEFAULT_ARGS = {
 }
 
 
-# ---------------------------------------------------------------------------
-# Source DAG Factory
-# Creates Bronze → Silver pipeline for a single source
-# ---------------------------------------------------------------------------
 def create_source_dag(
     source: SourceTag,
-    schedule: str | None,
+    schedule: timedelta,
     outlet_dataset: Dataset,
 ):
-    """Factory function to create a source-specific Bronze → Silver DAG."""
-
     @dag(
-        dag_id=f"reddit_{source.value}_pipeline",
-        description=f"Fetch {source.value} subreddits: Bronze → Silver",
+        dag_id=f"reddit_{source}_pipeline",
+        description=f"Fetch {source} subreddits: Bronze → Silver",
         schedule=schedule,
         start_date=datetime(2026, 1, 1),
         catchup=False,
         default_args=DEFAULT_ARGS,
-        tags=["reddit", "etl", source.value],
+        tags=["reddit", "etl", source],
     )
     def source_pipeline():
         @task
         def bronze():
-            """Fetch from Reddit API and save to Bronze layer."""
             create_bronze_source(source)
 
         @task(outlets=[outlet_dataset])
         def silver():
-            """Read Bronze, clean, and save to Silver layer."""
             create_silver_source(source)
 
         bronze() >> silver()
@@ -82,44 +67,35 @@ def create_source_dag(
     return source_pipeline()
 
 
-# ---------------------------------------------------------------------------
-# Create the 4 Source DAGs
-# ---------------------------------------------------------------------------
-# Popular & New: Daily at 6 AM UTC (lower frequency, stable data)
 reddit_popular_dag = create_source_dag(
     source=SourceTag.POPULAR,
-    schedule="0 6 * * *",  # Daily at 6 AM UTC
+    schedule=timedelta(days=1),
     outlet_dataset=SILVER_POPULAR_DATASET,
 )
 
 reddit_new_dag = create_source_dag(
     source=SourceTag.NEW,
-    schedule="0 6 * * *",  # Daily at 6 AM UTC
+    schedule=timedelta(days=1),
     outlet_dataset=SILVER_NEW_DATASET,
 )
 
-# Hot: Hourly (changes frequently)
 reddit_hot_dag = create_source_dag(
     source=SourceTag.HOT,
-    schedule="0 * * * *",  # Every hour
+    schedule=timedelta(hours=1),
     outlet_dataset=SILVER_HOT_DATASET,
 )
 
-# Rising: Every 2 hours (moderate frequency)
 reddit_rising_dag = create_source_dag(
     source=SourceTag.RISING,
-    schedule="0 */2 * * *",  # Every 2 hours
+    schedule=timedelta(hours=2),
     outlet_dataset=SILVER_RISING_DATASET,
 )
 
 
-# ---------------------------------------------------------------------------
-# Gold DAG - Triggered by ALL Silver Datasets
-# ---------------------------------------------------------------------------
 @dag(
     dag_id="reddit_gold_pipeline",
     description="Merge all Silver sources into Gold layer",
-    schedule=ALL_SILVER_DATASETS,  # Triggers when ALL 4 datasets are updated
+    schedule=ALL_SILVER_DATASETS,
     start_date=datetime(2026, 1, 1),
     catchup=False,
     default_args=DEFAULT_ARGS,
