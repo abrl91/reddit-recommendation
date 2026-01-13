@@ -31,4 +31,12 @@ plans/*
 # Airflow
 airflow/logs/
 airflow/.env
+airflow/.env.prod
 airflow/requirements.txt
+
+# Terraform
+terraform/.terraform/
+terraform/*.tfstate
+terraform/*.tfstate.*
+terraform/terraform.tfvars
+terraform/.terraform.lock.hcl

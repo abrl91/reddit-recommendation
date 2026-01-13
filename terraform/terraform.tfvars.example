@@ -1,0 +1,26 @@
+# Terraform variables - COPY THIS FILE TO terraform.tfvars AND FILL IN VALUES
+#
+# cp terraform.tfvars.example terraform.tfvars
+# Then edit terraform.tfvars with your values
+#
+# NOTE: terraform.tfvars is gitignored (contains sensitive data)
+
+# AWS Region (us-east-1 is cheapest for most services)
+aws_region = "us-east-1"
+
+# EC2 instance type (t3.medium = 2 vCPU, 4GB RAM - good for Airflow)
+instance_type = "t3.medium"
+
+# Your EC2 key pair name (create one first with: aws ec2 create-key-pair)
+# The .pem file should be at ~/.ssh/<key_pair_name>.pem
+key_pair_name = "reddit-airflow-key"
+
+# Your IP address for SSH and Airflow access
+# Find your IP: curl -s ifconfig.me
+# Format: "x.x.x.x/32" (the /32 means "only this single IP")
+allowed_ip = "YOUR_IP_HERE/32"
+
+# S3 bucket names (from config/config.yaml)
+s3_bucket_bronze = "reddit-data-bronze-d271225"
+s3_bucket_silver = "reddit-data-silver-d010126"
+s3_bucket_gold   = "reddit-data-gold-d090126"
