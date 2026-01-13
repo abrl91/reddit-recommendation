@@ -32,7 +32,6 @@ plans/*
 airflow/logs/
 airflow/.env
 airflow/.env.prod
-airflow/requirements.txt
 
 # Terraform
 terraform/.terraform/
