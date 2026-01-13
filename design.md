@@ -197,9 +197,14 @@ Milestone X.2 (Cleanup)
     ↓
 Validate + Test
     ↓
+Milestone X.3 (Deploy) ← Optional, for milestones with infra
+    ↓
+Validate + Test
+    ↓
 Next Milestone
-
 ```
+
+> **Note:** X.3 deployment steps are optional and only exist for milestones that introduce new infrastructure (M3: Airflow→EC2, M5: pgvector→RDS, M10: Web→Cloud).
 
 ---
 
@@ -207,25 +212,25 @@ Next Milestone
 
 ## PHASE 1: DATA FOUNDATION
 
-### Milestone 1: Get Data Flowing
+### Milestone 1: Get Data Flowing ✅
 
 **Goal:** Fetch trending subreddits from Reddit and save to S3. Prove the pipeline works.
 
-### M1.1 - Ugly MVP
+### M1.1 - Ugly MVP ✅
 
 **What to build:**
 
-- Single Python script (`fetch_reddit.py`)
-- Hardcode AWS credentials (we'll fix in cleanup)
-- Hit Reddit API without authentication (public endpoint)
-- Fetch subreddits from 4 independent sources, save each separately to bronze:
-  - `/subreddits/popular.json` → `bronze/subreddits/popular/`
-  - `/subreddits/new.json` → `bronze/subreddits/new/`
-  - `/r/popular/hot.json?sr_detail=true` → `bronze/subreddits/hot/`
-  - `/r/popular/rising.json?sr_detail=true` → `bronze/subreddits/rising/`
-- Use `sr_detail=true` to get subreddit metadata inline (avoids N+1 API calls)
-- Fetch top posts from each subreddit via `/r/{subreddit}/hot.json`
-- Save each source as separate JSON file to S3
+- ~~Single Python script (`fetch_reddit.py`)~~
+- ~~Hardcode AWS credentials (we'll fix in cleanup)~~
+- ~~Hit Reddit API without authentication (public endpoint)~~
+- ~~Fetch subreddits from 4 independent sources, save each separately to bronze:~~
+  - ~~`/subreddits/popular.json` → `bronze/subreddits/popular/`~~
+  - ~~`/subreddits/new.json` → `bronze/subreddits/new/`~~
+  - ~~`/r/popular/hot.json?sr_detail=true` → `bronze/subreddits/hot/`~~
+  - ~~`/r/popular/rising.json?sr_detail=true` → `bronze/subreddits/rising/`~~
+- ~~Use `sr_detail=true` to get subreddit metadata inline (avoids N+1 API calls)~~
+- ~~Fetch top posts from each subreddit via `/r/{subreddit}/hot.json`~~
+- ~~Save each source as separate JSON file to S3~~
 
 > **Note:** Source tagging happens in transformation (silver layer), not ingestion. Each subreddit gets tagged with its source(s) for UI badges.
 
@@ -255,14 +260,14 @@ BUCKET_NAME = "reddit-data-bronze"
 - ✓ You see the JSON file in S3 console
 - ✓ JSON contains subreddit data (name, description, subscribers, etc.)
 
-### M1.2 - Cleanup
+### M1.2 - Cleanup ✅
 
 **What to improve:**
 
-- Move AWS credentials to environment variables or AWS credentials file
-- Add error handling with try/except blocks
-- Add proper logging instead of print statements
-- Create basic folder structure:
+- ~~Move AWS credentials to environment variables or AWS credentials file~~
+- ~~Add error handling with try/except blocks~~
+- ~~Add proper logging instead of print statements~~
+- ~~Create basic folder structure:~~
 
     ```
     reddit-recommender/
@@ -286,9 +291,9 @@ BUCKET_NAME = "reddit-data-bronze"
     └── pyproject.toml
 
     ```
-    
-- Add configuration file for API endpoints and S3 paths
-- Add basic unit test to verify S3 upload
+
+- ~~Add configuration file for API endpoints and S3 paths~~
+- ~~Add basic unit test to verify S3 upload~~
 
 **Success Criteria:**
 
@@ -299,23 +304,23 @@ BUCKET_NAME = "reddit-data-bronze"
 
 ---
 
-### Milestone 2: Bronze → Silver Pipeline
+### Milestone 2: Bronze → Silver Pipeline ✅
 
 **Goal:** Clean the raw data and create structured silver layer in Parquet format.
 
-### M2.1 - Ugly MVP
+### M2.1 - Ugly MVP ✅
 
 **What to build:**
 
-- New script (`transform_reddit.py`)
-- Read the JSON from S3 bronze layer
-- Use Polars to:
-    - Remove null/invalid entries
-    - Standardize field names (snake_case)
-    - Extract only needed fields (subreddit name, description, subscribers, created_date, url)
-    - Add processing timestamp
-- Save to S3 silver layer as **Parquet** file
-- Example path: `s3://reddit-data-silver/subreddits/2025-12-20.parquet`
+- ~~New script (`transform_reddit.py`)~~
+- ~~Read the JSON from S3 bronze layer~~
+- ~~Use Polars to:~~
+    - ~~Remove null/invalid entries~~
+    - ~~Standardize field names (snake_case)~~
+    - ~~Extract only needed fields (subreddit name, description, subscribers, created_date, url)~~
+    - ~~Add processing timestamp~~
+- ~~Save to S3 silver layer as **Parquet** file~~
+- ~~Example path: `s3://reddit-data-silver/subreddits/2025-12-20.parquet`~~
 
 **Code structure:**
 
@@ -337,18 +342,18 @@ import boto3
 - ✓ Parquet file is smaller than JSON (compression works)
 - ✓ You can read the Parquet file and see clean data
 
-### M2.2 - Cleanup
+### M2.2 - Cleanup ✅
 
 **What to improve:**
 
-- Separate bronze and silver logic into different modules
-- Add defensive data handling:
-    - Filter records missing required fields (e.g., subreddit_name)
-    - Fill nulls with sensible defaults
-    - Log null statistics before filling (visibility into data quality)
-- Implement better file naming with partitioning:
-    - `s3://reddit-data-silver/subreddits/year=2025/month=12/day=20/data.parquet`
-- Add logging for transformation stats (records processed, dropped, etc.)
+- ~~Separate bronze and silver logic into different modules~~
+- ~~Add defensive data handling:~~
+    - ~~Filter records missing required fields (e.g., subreddit_name)~~
+    - ~~Fill nulls with sensible defaults~~
+    - ~~Log null statistics before filling (visibility into data quality)~~
+- ~~Implement better file naming with partitioning:~~
+    - ~~`s3://reddit-data-silver/subreddits/year=2025/month=12/day=20/data.parquet`~~
+- ~~Add logging for transformation stats (records processed, dropped, etc.)~~
 
 **Success Criteria:**
 
@@ -361,23 +366,23 @@ import boto3
 
 ---
 
-### Milestone 3: Airflow Orchestration
+### Milestone 3: Airflow Orchestration ✅
 
 **Goal:** Automate the daily pipeline with Airflow.
 
-### M3.1 - Ugly MVP
+### M3.1 - Ugly MVP ✅
 
 **What to build:**
 
-- Local Airflow setup using docker-compose
-- 5 DAGs using TaskFlow API and Dataset triggers:
-    - 4 Source DAGs (popular, new, hot, rising): `bronze()` → `silver()` tasks
-    - 1 Gold DAG: Triggered when ALL silver datasets are updated
-- Per-source scheduling:
-    - Popular/New: Daily at 6 AM UTC
-    - Hot: Hourly
-    - Rising: Every 2 hours
-- Event-driven Gold merge via Airflow Datasets (no polling)
+- ~~Local Airflow setup using docker-compose~~
+- ~~5 DAGs using TaskFlow API and Dataset triggers:~~
+    - ~~4 Source DAGs (popular, new, hot, rising): `bronze()` → `silver()` tasks~~
+    - ~~1 Gold DAG: Triggered when ALL silver datasets are updated~~
+- ~~Per-source scheduling:~~
+    - ~~Popular/New: Daily~~
+    - ~~Hot: Hourly~~
+    - ~~Rising: Every 2 hours~~
+- ~~Event-driven Gold merge via Airflow Datasets (no polling)~~
 
 **Architecture:**
 
@@ -429,7 +434,7 @@ def reddit_gold_pipeline():
 - ✓ Gold DAG triggers automatically when all Silver datasets complete
 - ✓ Data appears in S3 after DAGs complete
 
-### M3.2 - Cleanup
+### M3.2 - Cleanup ✅
 
 **What to improve:**
 
@@ -437,16 +442,53 @@ def reddit_gold_pipeline():
 - ~~Add retry logic~~ ✓ (done: `retries=2, retry_delay=5min`)
 - ~~Separate DAG definition from business logic~~ ✓ (done: TaskFlow API + src functions)
 - ~~Add sensors~~ → Replaced with Dataset triggers (better approach)
-- Add email/Slack alerting on failure
-- Add task documentation and default_args
-- Add monitoring dashboard (Airflow metrics)
+- ~~Add task documentation and default_args~~ ✓ (done: DEFAULT_ARGS with owner, retries, retry_delay)
+- ~~Add email/Slack alerting on failure~~ → Moved to M8.2 (with monitoring)
+- ~~Add monitoring dashboard (Airflow metrics)~~ → Moved to M8.2
 
 **Success Criteria:**
 
 - ✓ DAGs run automatically at scheduled times
 - ✓ Failed tasks retry automatically
-- You get notified if DAG fails after retries
 - ✓ Code is clean and maintainable
+
+### M3.3 - EC2 Deployment (Optional)
+
+**Goal:** Deploy Airflow to AWS EC2 using Terraform for IaC learning.
+
+**What to build:**
+
+- Terraform infrastructure:
+    - VPC with public subnet
+    - EC2 instance (t3.medium) running Docker
+    - Security groups (SSH + HTTP 8080, restricted to your IP)
+    - IAM role with S3 access for bronze/silver/gold buckets
+    - Elastic IP for stable address across stop/start
+- Production docker-compose override (`docker-compose.prod.yaml`)
+- Deployment script for git pull + rebuild
+
+**Architecture:**
+```
+EC2 (t3.medium) + Elastic IP
+├── Docker Compose
+│   ├── Airflow Webserver (:8080)
+│   ├── Airflow Scheduler
+│   └── PostgreSQL
+└── IAM Role → S3 Access
+```
+
+**Cost:**
+- Running 24/7: ~$33/month
+- Stopped (learning mode): ~$6/month
+
+**Success Criteria:**
+
+- Terraform provisions all resources successfully
+- Airflow UI accessible at `http://<elastic-ip>:8080`
+- DAGs can be triggered and write to S3
+- Instance can be stopped/started without losing IP
+
+> **Note:** See `plans/ec2-deployment.md` for detailed implementation steps.
 
 ---
 
@@ -580,10 +622,10 @@ from groq import Groq
 
 **What to improve:**
 
-- Migrate from ChromaDB to **pgvector on AWS RDS**:
-    - Set up PostgreSQL with pgvector extension
+- Migrate from ChromaDB to **pgvector** (local PostgreSQL first):
+    - Set up local PostgreSQL with pgvector extension (Docker)
     - Create table for embeddings with proper indexes
-    - Migrate existing embeddings
+    - Migrate existing embeddings from ChromaDB
 - Batch embedding generation (process 100 subreddits at once)
 - Add embedding caching:
     - Don't regenerate embeddings for existing subreddits
@@ -595,11 +637,43 @@ from groq import Groq
 
 **Success Criteria:**
 
-- ✓ pgvector database running on RDS
-- ✓ Embeddings persist across sessions
-- ✓ Batch processing speeds up embedding generation
-- ✓ Recommendations show confidence scores
-- ✓ System handles API errors gracefully
+- pgvector running locally in Docker
+- Embeddings persist across sessions
+- Batch processing speeds up embedding generation
+- Recommendations show confidence scores
+- System handles API errors gracefully
+
+### M5.3 - RDS Deployment (Optional)
+
+**Goal:** Deploy pgvector database to AWS RDS for production use.
+
+**What to build:**
+
+- Terraform module for RDS PostgreSQL:
+    - RDS instance with pgvector extension
+    - Security group for EC2 → RDS access (if M3.3 done)
+    - Subnet group in existing VPC
+    - Parameter group with pgvector enabled
+- Database migration script (local → RDS)
+- Connection string management (environment variables)
+
+**Architecture:**
+```
+EC2 (Airflow) ──────► RDS PostgreSQL
+                      └── pgvector extension
+                      └── embeddings table
+```
+
+**Cost:**
+- db.t3.micro: ~$15/month
+- db.t3.small: ~$30/month
+
+**Success Criteria:**
+
+- RDS instance provisioned via Terraform
+- Embeddings stored in RDS pgvector
+- Airflow tasks can read/write embeddings
+- Local development still works (fallback to local postgres)
 
 ---
 
@@ -773,9 +847,14 @@ from groq import Groq
 - ✓ Accuracy is better than random (>50%)
 - ✓ System learns from validation ratings (adds to dataset)
 
-### M8.2 - Cleanup (Analytics)
+### M8.2 - Cleanup (Analytics & Monitoring)
 
 **What to build:**
+
+- **Airflow Alerting & Monitoring (moved from M3.2):**
+    - Email/Slack alerting on DAG failure
+    - Airflow metrics dashboard (task duration, success rate, etc.)
+    - CloudWatch integration (if deployed to AWS)
 
 - Jupyter notebook with analytics using Polars:
     - **Trending Analysis:**
@@ -811,6 +890,8 @@ from groq import Groq
 - ✓ Charts are clear and informative
 - ✓ You can identify trends and patterns
 - ✓ Recommendation accuracy is tracked over time
+- You get notified if DAG fails after retries (alerting)
+- Airflow metrics visible in dashboard
 
 ---
 
@@ -958,11 +1039,6 @@ async def home():
     - Remember user preferences
     - Rating history
     - Recommendation history
-- Deploy to AWS:
-    - Use AWS App Runner, ECS, or EC2
-    - Set up load balancer
-    - Configure HTTPS
-    - Set up domain name
 - Add API documentation:
     - Swagger/OpenAPI docs
     - Rate limiting
@@ -970,10 +1046,50 @@ async def home():
 
 **Success Criteria:**
 
-- ✓ Modern, polished web interface
-- ✓ Multiple users can have separate accounts
-- ✓ Application is deployed and accessible via URL
-- ✓ API is documented and secure
+- Modern, polished web interface
+- Multiple users can have separate accounts
+- API is documented and secure
+- Application runs locally with full features
+
+### M10.3 - Web App Deployment (Optional)
+
+**Goal:** Deploy the web application to AWS for public access.
+
+**What to build:**
+
+- Terraform module for web hosting:
+    - AWS App Runner or ECS Fargate (containerized)
+    - Application Load Balancer
+    - ACM certificate for HTTPS
+    - Route 53 for domain (optional)
+- CI/CD pipeline:
+    - GitHub Actions for build + deploy
+    - Docker image push to ECR
+    - Automatic deployment on merge to main
+- Environment configuration:
+    - Production secrets management (AWS Secrets Manager)
+    - Environment-specific configs (dev/staging/prod)
+
+**Architecture:**
+```
+Internet ──► ALB (HTTPS) ──► App Runner/ECS
+                              └── FastAPI container
+                              └── Connects to RDS (M5.3)
+                              └── Connects to S3 buckets
+```
+
+**Cost:**
+- App Runner: ~$5-25/month (scales to zero)
+- ECS Fargate: ~$10-30/month
+- ALB: ~$16/month
+- Domain + SSL: ~$12/year + free (ACM)
+
+**Success Criteria:**
+
+- Application accessible via HTTPS URL
+- Auto-scaling handles traffic spikes
+- CI/CD deploys on git push
+- Monitoring and logging in CloudWatch
 
 ---
 

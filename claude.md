@@ -193,7 +193,7 @@ python -m src
 
 ## Current Milestone
 
-**M1, M2, M3.1 complete**. Next: M3.2 (Airflow cleanup - alerting) or M4 (User Feedback CLI).
+**M1, M2, M3.1, M3.2 complete**. Next: M4 (User Feedback CLI) or M3.3 (EC2 Deployment - optional).
 
 ## Notes for Claude
 
