@@ -1,8 +1,8 @@
-from enum import Enum
+from enum import StrEnum
 from typing import TypedDict
 
 
-class SourceTag(str, Enum):
+class SourceTag(StrEnum):
     """Source tags for subreddit data origin."""
 
     POPULAR = "popular"
