@@ -11,7 +11,9 @@ from src.models.reddit import (
 logger = structlog.get_logger().bind(module="ingestion")
 
 REDDIT_BASE_URL = "https://www.reddit.com"
-DEFAULT_HEADERS = {"User-Agent": "reddit-recommendation/1.0"}
+DEFAULT_HEADERS = {
+    "User-Agent": "linux:reddit-recommendation:v1.0.0 (by /u/data-engineering-learner)"
+}
 DEFAULT_TIMEOUT = 30
 
 
