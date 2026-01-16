@@ -490,6 +490,11 @@ EC2 (t3.medium) + Elastic IP
 
 > **Note:** See `plans/ec2-deployment.md` for detailed implementation steps.
 
+> **Known Issue:** Reddit API blocks requests from datacenter IPs (TLS fingerprinting). Currently using conditional OAuth - works locally (residential IP), blocked on EC2. Options if Reddit doesn't approve API registration:
+> 1. Use `curl_cffi` library (mimics curl's TLS fingerprint)
+> 2. Use Reddit RSS feeds (limited metadata)
+> 3. Run ingestion locally, push to S3, EC2 handles silver/gold only
+
 ---
 
 ## PHASE 2: USER INTERACTION
