@@ -2,6 +2,13 @@ import httpx
 import structlog
 
 from src.ingestion.exceptions import IngestionError
+from src.ingestion.reddit_auth import (
+    REDDIT_OAUTH_BASE_URL,
+    REDDIT_PUBLIC_BASE_URL,
+    get_oauth_headers,
+    get_public_headers,
+    has_oauth_credentials,
+)
 from src.models.reddit import (
     SubredditChild,
     SubredditData,
@@ -10,19 +17,35 @@ from src.models.reddit import (
 
 logger = structlog.get_logger().bind(module="ingestion")
 
-REDDIT_BASE_URL = "https://www.reddit.com"
-DEFAULT_HEADERS = {
-    "User-Agent": "linux:reddit-recommendation:v1.0.0 (by /u/data-engineering-learner)"
-}
 DEFAULT_TIMEOUT = 30
+
+_use_oauth: bool | None = None
+
+
+def _should_use_oauth() -> bool:
+    global _use_oauth
+    if _use_oauth is None:
+        _use_oauth = has_oauth_credentials()
+        if _use_oauth:
+            logger.info("OAuth credentials found, using authenticated API")
+        else:
+            logger.info(
+                "No OAuth credentials, using public API (residential IP only)")
+    return _use_oauth
+
+
+def get_base_url() -> str:
+    return REDDIT_OAUTH_BASE_URL if _should_use_oauth() else REDDIT_PUBLIC_BASE_URL
 
 
 def make_request(url: str) -> dict:
-    """Make HTTP request with error handling. Raises IngestionError on failure."""
     logger.info("Fetching from Reddit API", url=url)
 
+    use_oauth = _should_use_oauth()
+    headers = get_oauth_headers() if use_oauth else get_public_headers()
+
     try:
-        response = httpx.get(url, headers=DEFAULT_HEADERS, timeout=DEFAULT_TIMEOUT)
+        response = httpx.get(url, headers=headers, timeout=DEFAULT_TIMEOUT)
     except httpx.RequestError as e:
         raise IngestionError(f"Network error fetching {url}") from e
 
@@ -31,7 +54,8 @@ def make_request(url: str) -> dict:
             f"Reddit API returned status {response.status_code}: {response.text[:200]}"
         )
 
-    logger.info("Reddit API response received", status_code=response.status_code)
+    logger.info("Reddit API response received",
+                status_code=response.status_code)
     return response.json()
 
 
