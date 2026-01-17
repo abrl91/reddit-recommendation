@@ -27,6 +27,7 @@ credentials.json
 
 # Claude
 plans/*
+learn/*
 
 # Airflow
 airflow/logs/
