@@ -36,8 +36,8 @@ docker buildx version
 dnf install -y git
 
 # Create app directory
-mkdir -p /opt/reddit-recommendation
-cd /opt/reddit-recommendation
+mkdir -p /opt/lemmy-recommendation
+cd /opt/lemmy-recommendation
 
 # Clone the repository
 git clone ${github_repo} .
@@ -56,7 +56,7 @@ if [ -f airflow/.env.prod.example ]; then
 fi
 
 # Create symlink for docker-compose variable substitution
-# docker-compose reads ${VAR} from .env, not .env.prod
+# docker-compose reads $${VAR} from .env, not .env.prod
 ln -sf .env.prod airflow/.env
 
 # Create systemd service for Airflow
@@ -69,7 +69,7 @@ After=docker.service
 [Service]
 Type=oneshot
 RemainAfterExit=yes
-WorkingDirectory=/opt/reddit-recommendation/airflow
+WorkingDirectory=/opt/lemmy-recommendation/airflow
 ExecStart=/usr/local/lib/docker/cli-plugins/docker-compose -f docker-compose.yaml -f docker-compose.prod.yaml up -d
 ExecStop=/usr/local/lib/docker/cli-plugins/docker-compose -f docker-compose.yaml -f docker-compose.prod.yaml down
 TimeoutStartSec=300
@@ -87,6 +87,6 @@ usermod -aG docker ec2-user
 echo "=== Bootstrap complete at $(date) ==="
 echo "Next steps:"
 echo "1. SSH to instance"
-echo "2. Edit /opt/reddit-recommendation/airflow/.env.prod with secrets"
+echo "2. Edit /opt/lemmy-recommendation/airflow/.env.prod with secrets"
 echo "3. Run: sudo systemctl enable airflow && sudo systemctl start airflow"
 echo "4. Access Airflow at http://<ELASTIC_IP>:8080"

@@ -13,7 +13,7 @@ instance_type = "t3.medium"
 
 # Your EC2 key pair name (create one first with: aws ec2 create-key-pair)
 # The .pem file should be at ~/.ssh/<key_pair_name>.pem
-key_pair_name = "reddit-airflow-key"
+key_pair_name = "lemmy-airflow-key"
 
 # Your IP address for SSH and Airflow access
 # Find your IP: curl -s ifconfig.me
@@ -21,6 +21,6 @@ key_pair_name = "reddit-airflow-key"
 allowed_ip = "YOUR_IP_HERE/32"
 
 # S3 bucket names (from config/config.yaml)
-s3_bucket_bronze = "reddit-data-bronze-d271225"
-s3_bucket_silver = "reddit-data-silver-d010126"
-s3_bucket_gold   = "reddit-data-gold-d090126"
+s3_bucket_bronze = "lemmy-bronze-data"
+s3_bucket_silver = "lemmy-silver-data"
+s3_bucket_gold   = "lemmy-gold-data"

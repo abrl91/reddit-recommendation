@@ -1,4 +1,4 @@
-# Terraform configuration for Reddit Recommendation Airflow deployment
+# Terraform configuration for Lemmy Recommendation Airflow deployment
 
 terraform {
   required_version = ">= 1.0"
@@ -19,7 +19,7 @@ provider "aws" {
 
   default_tags {
     tags = {
-      Project     = "reddit-recommendation"
+      Project     = "lemmy-recommendation"
       Environment = "production"
       ManagedBy   = "terraform"
     }

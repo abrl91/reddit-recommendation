@@ -18,7 +18,7 @@ resource "aws_vpc" "main" {
   enable_dns_support   = true
 
   tags = {
-    Name = "reddit-recommendation-vpc"
+    Name = "lemmy-recommendation-vpc"
   }
 }
 
@@ -27,7 +27,7 @@ resource "aws_internet_gateway" "main" {
   vpc_id = aws_vpc.main.id
 
   tags = {
-    Name = "reddit-recommendation-igw"
+    Name = "lemmy-recommendation-igw"
   }
 }
 
@@ -39,7 +39,7 @@ resource "aws_subnet" "public" {
   map_public_ip_on_launch = true
 
   tags = {
-    Name = "reddit-recommendation-public-subnet"
+    Name = "lemmy-recommendation-public-subnet"
   }
 }
 
@@ -54,7 +54,7 @@ resource "aws_route_table" "public" {
   }
 
   tags = {
-    Name = "reddit-recommendation-public-rt"
+    Name = "lemmy-recommendation-public-rt"
   }
 }
 

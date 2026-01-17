@@ -6,7 +6,7 @@
 # - All outbound traffic (for pip, docker pull, etc.)
 
 resource "aws_security_group" "airflow" {
-  name        = "reddit-recommendation-airflow-sg"
+  name        = "lemmy-recommendation-airflow-sg"
   description = "Security group for Airflow EC2 instance"
   vpc_id      = aws_vpc.main.id
 
@@ -39,6 +39,6 @@ resource "aws_security_group" "airflow" {
   }
 
   tags = {
-    Name = "reddit-recommendation-airflow-sg"
+    Name = "lemmy-recommendation-airflow-sg"
   }
 }

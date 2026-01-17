@@ -18,11 +18,11 @@ data "aws_iam_policy_document" "ec2_assume_role" {
 
 # The IAM role itself
 resource "aws_iam_role" "airflow" {
-  name               = "reddit-recommendation-airflow-role"
+  name               = "lemmy-recommendation-airflow-role"
   assume_role_policy = data.aws_iam_policy_document.ec2_assume_role.json
 
   tags = {
-    Name = "reddit-recommendation-airflow-role"
+    Name = "lemmy-recommendation-airflow-role"
   }
 }
 
@@ -55,7 +55,7 @@ data "aws_iam_policy_document" "s3_access" {
 
 # Attach the permission policy to the role
 resource "aws_iam_role_policy" "s3_access" {
-  name   = "reddit-recommendation-s3-access"
+  name   = "lemmy-recommendation-s3-access"
   role   = aws_iam_role.airflow.id
   policy = data.aws_iam_policy_document.s3_access.json
 }
@@ -63,6 +63,6 @@ resource "aws_iam_role_policy" "s3_access" {
 # Instance profile - required to attach IAM role to EC2
 # (You can't attach a role directly; you need this wrapper)
 resource "aws_iam_instance_profile" "airflow" {
-  name = "reddit-recommendation-airflow-profile"
+  name = "lemmy-recommendation-airflow-profile"
   role = aws_iam_role.airflow.name
 }

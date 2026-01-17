@@ -35,7 +35,7 @@ resource "aws_instance" "airflow" {
     delete_on_termination = true
 
     tags = {
-      Name = "reddit-recommendation-airflow-volume"
+      Name = "lemmy-recommendation-airflow-volume"
     }
   }
 
@@ -45,7 +45,7 @@ resource "aws_instance" "airflow" {
   })
 
   tags = {
-    Name = "reddit-recommendation-airflow"
+    Name = "lemmy-recommendation-airflow"
   }
 
   # Wait for user_data to complete before marking as created
@@ -61,7 +61,7 @@ resource "aws_eip" "airflow" {
   domain   = "vpc"
 
   tags = {
-    Name = "reddit-recommendation-airflow-eip"
+    Name = "lemmy-recommendation-airflow-eip"
   }
 
   # Make sure the internet gateway exists first
