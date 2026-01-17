@@ -1,3 +1,5 @@
+from typing import Literal
+
 import polars as pl
 import structlog
 
@@ -6,9 +8,18 @@ from src.transformation.quality import validate_and_clean
 
 logger = structlog.get_logger().bind(module="gold")
 
+DedupKey = Literal["post_id", "community_name"]
+
+
+def _get_dedup_key(columns: list[str]) -> DedupKey:
+    """Determine dedup key based on DataFrame columns."""
+    if "post_id" in columns:
+        return "post_id"
+    return "community_name"
+
 
 def merge_silver_sources(silver_data: dict[str, pl.DataFrame]) -> pl.DataFrame:
-    """Deduplicates by community_name, aggregates source tags into list."""
+    """Deduplicates by primary key (post_id or community_name), aggregates source tags."""
     if not silver_data:
         logger.warning("No silver sources provided for Gold merge")
         return pl.DataFrame()
@@ -34,14 +45,15 @@ def merge_silver_sources(silver_data: dict[str, pl.DataFrame]) -> pl.DataFrame:
         combined = pl.concat(dfs)
 
     total_records = len(combined)
-    logger.info("Combined silver sources", total_records=total_records)
+    dedup_key = _get_dedup_key(combined.columns)
+    logger.info("Combined silver sources", total_records=total_records, dedup_key=dedup_key)
 
     with pipeline_step("deduplicate_and_aggregate", record_count=total_records):
         non_key_cols = [
-            c for c in combined.columns if c not in ("community_name", "source")
+            c for c in combined.columns if c not in (dedup_key, "source")
         ]
 
-        merged = combined.group_by("community_name").agg(
+        merged = combined.group_by(dedup_key).agg(
             [pl.col(c).first() for c in non_key_cols]
             + [pl.col("source").alias("sources")]
         )
@@ -49,7 +61,8 @@ def merge_silver_sources(silver_data: dict[str, pl.DataFrame]) -> pl.DataFrame:
     unique_count = len(merged)
     logger.info(
         "Gold merge complete",
-        unique_communities=unique_count,
+        dedup_key=dedup_key,
+        unique_records=unique_count,
         duplicates_merged=total_records - unique_count,
     )
 

@@ -33,6 +33,13 @@ COMMUNITY_SCHEMA: SchemaDefinition = {
     "url": pl.String,
     "published_date": pl.String,
     "instance": pl.String,
+    # Activity metrics
+    "posts_count": pl.Int64,
+    "comments_count": pl.Int64,
+    "users_active_week": pl.Int64,
+    # Display fields
+    "icon": pl.String,
+    "banner": pl.String,
 }
 
 POST_SCHEMA: SchemaDefinition = {
@@ -46,6 +53,15 @@ POST_SCHEMA: SchemaDefinition = {
     "published_date": pl.String,
     "score": pl.Int64,
     "num_comments": pl.Int64,
+    # Engagement details
+    "upvotes": pl.Int64,
+    "downvotes": pl.Int64,
+    # Display/attribution
+    "creator_name": pl.String,
+    # Content flags
+    "is_nsfw": pl.Boolean,
+    "featured_community": pl.Boolean,
+    "featured_local": pl.Boolean,
 }
 
 _COMMUNITY_FIELD_MAPPING = [
@@ -57,6 +73,13 @@ _COMMUNITY_FIELD_MAPPING = [
     ("url", "url", pl.String),
     ("published", "published_date", pl.String),
     ("instance", "instance", pl.String),
+    # Activity metrics
+    ("posts_count", "posts_count", pl.Int64),
+    ("comments_count", "comments_count", pl.Int64),
+    ("users_active_week", "users_active_week", pl.Int64),
+    # Display fields
+    ("icon", "icon", pl.String),
+    ("banner", "banner", pl.String),
 ]
 
 _POST_FIELD_MAPPING = [
@@ -70,6 +93,15 @@ _POST_FIELD_MAPPING = [
     ("published", "published_date", pl.String),
     ("score", "score", pl.Int64),
     ("num_comments", "num_comments", pl.Int64),
+    # Engagement details
+    ("upvotes", "upvotes", pl.Int64),
+    ("downvotes", "downvotes", pl.Int64),
+    # Display/attribution
+    ("creator_name", "creator_name", pl.String),
+    # Content flags
+    ("nsfw", "is_nsfw", pl.Boolean),
+    ("featured_community", "featured_community", pl.Boolean),
+    ("featured_local", "featured_local", pl.Boolean),
 ]
 
 

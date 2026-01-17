@@ -37,6 +37,13 @@ def _map_community_to_data(comm_view: RawCommunityView) -> CommunityData | None:
         "published": community.get("published") or "",
         "url": actor_id or "",
         "instance": instance,
+        # Activity metrics
+        "posts_count": counts.get("posts", 0),
+        "comments_count": counts.get("comments", 0),
+        "users_active_week": counts.get("users_active_week", 0),
+        # Display fields
+        "icon": community.get("icon"),
+        "banner": community.get("banner"),
     }
 
 
@@ -60,6 +67,15 @@ def _map_post_to_data(post_view: RawPostView) -> PostData | None:
         "published": post.get("published") or "",
         "score": counts.get("score", 0),
         "num_comments": counts.get("comments", 0),
+        # Engagement details
+        "upvotes": counts.get("upvotes", 0),
+        "downvotes": counts.get("downvotes", 0),
+        # Display/attribution
+        "creator_name": creator.get("name") or "",
+        # Content flags
+        "nsfw": post.get("nsfw", False),
+        "featured_community": post.get("featured_community", False),
+        "featured_local": post.get("featured_local", False),
     }
 
 
