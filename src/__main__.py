@@ -1,28 +1,27 @@
+from src.transformation.merge_datasources import merge_silver_sources
+from src.transformation import (
+    DataQualityError,
+    TransformationError,
+    clean_source_data,
+)
+from src.storage import (
+    StorageError,
+    collect_silver_for_merge,
+    read_bronze,
+    save_bronze,
+    save_gold,
+    save_silver,
+)
+from src.ingestion.fetch_lemmy import fetch
+from src.ingestion.exceptions import IngestionError
+from src.config import SOURCES, SourceType, get_all_streams
+import structlog
 from datetime import datetime
 
 from dotenv import load_dotenv
 
 load_dotenv()
 
-import structlog
-
-from src.config import SOURCES, SourceType, get_all_streams
-from src.ingestion.exceptions import IngestionError
-from src.ingestion.fetch_lemmy import fetch
-from src.storage import (
-    StorageError,
-    read_bronze,
-    read_silver_for_gold,
-    save_bronze,
-    save_gold,
-    save_silver,
-)
-from src.transformation import (
-    DataQualityError,
-    TransformationError,
-    clean_source_data,
-)
-from src.transformation.merge_datasources import merge_silver_sources
 
 logger = structlog.get_logger()
 
@@ -75,11 +74,12 @@ def create_gold(source: SourceType, date: datetime | None = None) -> None:
     log.info("Creating gold layer", date=date)
 
     try:
-        silver_data = read_silver_for_gold(source, date=date)
+        silver_data = collect_silver_for_merge(source, date=date)
 
         if not silver_data:
             log.error("No silver data found for any tag")
-            raise StorageError(f"No silver data available for {source} Gold merge")
+            raise StorageError(
+                f"No silver data available for {source} Gold merge")
 
         merged_data = merge_silver_sources(silver_data)
         save_gold(merged_data, source)

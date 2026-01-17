@@ -113,11 +113,11 @@ def read_silver(
     source: SourceType,
     tag: str,
     date: datetime | None = None,
-    recursive: bool = True,
+    include_all_hours: bool = True,
 ) -> pl.DataFrame | None:
     bucket, prefix = get_silver_location(source, tag)
     partition_path = get_partition_path(prefix, date=date, include_hour=False)
-    glob_pattern = "*/*.parquet" if recursive else "*.parquet"
+    glob_pattern = "*/*.parquet" if include_all_hours else "*.parquet"
     s3_url = f"s3://{bucket}/{partition_path}/{glob_pattern}"
     storage_options = _get_polars_storage_options()
 
@@ -141,20 +141,21 @@ def read_silver(
         return None
 
 
-def read_silver_for_gold(
+def collect_silver_for_merge(
     source: SourceType,
     date: datetime | None = None,
 ) -> dict[str, pl.DataFrame]:
+    """Reads all configured silver tags for a source, returning dict[tag, DataFrame]."""
     tags = get_gold_tags(source)
     results: dict[str, pl.DataFrame] = {}
 
     for tag in tags:
-        df = read_silver(source, tag, date=date, recursive=True)
+        df = read_silver(source, tag, date=date, include_all_hours=True)
         if df is not None:
             results[tag] = df
 
     logger.info(
-        "Read silver for gold merge",
+        "Collected silver for merge",
         source=source,
         tags_found=list(results.keys()),
         tags_missing=[t for t in tags if t not in results],

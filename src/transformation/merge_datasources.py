@@ -46,7 +46,8 @@ def merge_silver_sources(silver_data: dict[str, pl.DataFrame]) -> pl.DataFrame:
 
     total_records = len(combined)
     dedup_key = _get_dedup_key(combined.columns)
-    logger.info("Combined silver sources", total_records=total_records, dedup_key=dedup_key)
+    logger.info("Combined silver sources",
+                total_records=total_records, dedup_key=dedup_key)
 
     with pipeline_step("deduplicate_and_aggregate", record_count=total_records):
         non_key_cols = [
@@ -54,7 +55,8 @@ def merge_silver_sources(silver_data: dict[str, pl.DataFrame]) -> pl.DataFrame:
         ]
 
         merged = combined.group_by(dedup_key).agg(
-            [pl.col(c).first() for c in non_key_cols]
+            [pl.col(c).first()  # for simplicity using first
+             for c in non_key_cols]
             + [pl.col("source").alias("sources")]
         )
 
