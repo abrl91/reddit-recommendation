@@ -1,15 +1,19 @@
 """
-Reddit Data Pipeline DAGs
+Lemmy Data Pipeline DAGs
 
-5 DAGs using Airflow Datasets for event-driven orchestration:
-- 4 Source DAGs: Fetch from Reddit API → Bronze → Silver (each produces a Dataset)
-- 1 Gold DAG: Triggered when all Silver datasets are updated → Merges to Gold
+18 DAGs using Airflow Datasets for event-driven orchestration:
+- 16 Source DAGs: Fetch from Lemmy API → Bronze → Silver (each produces a Dataset)
+- 2 Gold DAGs: Triggered when all Silver datasets for a source type are updated
 
 Dataset Flow:
-    popular_dag ──► silver_popular_dataset ──┐
-    new_dag ──────► silver_new_dataset ──────┼──► gold_dag (when ALL 4 updated)
-    hot_dag ──────► silver_hot_dataset ──────┤
-    rising_dag ───► silver_rising_dataset ───┘
+    posts_hot_dag ──────► silver_posts_hot ──────┐
+    posts_new_dag ──────► silver_posts_new ──────┤
+    ...                                          ├──► posts_gold_dag
+    posts_most_comments ► silver_posts_most... ──┘
+
+    communities_hot_dag ► silver_communities_hot ┐
+    communities_new_dag ► silver_communities_new ┼──► communities_gold_dag
+    ...                                          ┘
 """
 
 from datetime import datetime, timedelta
@@ -18,19 +22,23 @@ from airflow.datasets import Dataset
 from airflow.decorators import dag, task
 
 from src import create_bronze_source, create_gold, create_silver_source
-from src.models import SourceTag
+from src.config import SOURCES, SourceType, get_all_streams, get_s3_bucket
 
-SILVER_POPULAR_DATASET = Dataset("s3://reddit-data-silver/subreddits/popular")
-SILVER_NEW_DATASET = Dataset("s3://reddit-data-silver/subreddits/new")
-SILVER_HOT_DATASET = Dataset("s3://reddit-data-silver/subreddits/hot")
-SILVER_RISING_DATASET = Dataset("s3://reddit-data-silver/subreddits/rising")
-
-ALL_SILVER_DATASETS = [
-    SILVER_POPULAR_DATASET,
-    SILVER_NEW_DATASET,
-    SILVER_HOT_DATASET,
-    SILVER_RISING_DATASET,
-]
+TAG_SCHEDULES: dict[str, timedelta] = {
+    # High-frequency: content changes rapidly
+    "hot": timedelta(hours=3),
+    "active": timedelta(hours=3),
+    "scaled": timedelta(hours=3),
+    # Medium-frequency
+    "new": timedelta(hours=4),
+    "most_comments": timedelta(hours=6),
+    "top_day": timedelta(hours=8),
+    # Low-frequency: aggregated content, slower to change
+    "top_week": timedelta(hours=12),
+    "top_month": timedelta(hours=12),
+    "top_year": timedelta(hours=12),
+    "top_all": timedelta(hours=12),
+}
 
 DEFAULT_ARGS = {
     "owner": "airflow",
@@ -39,75 +47,88 @@ DEFAULT_ARGS = {
 }
 
 
+def _build_dataset_uri(source: SourceType, tag: str) -> str:
+    """Build S3 URI for a silver dataset."""
+    bucket = get_s3_bucket("silver")
+    return f"s3://{bucket}/{source}/{tag}"
+
+
+SILVER_DATASETS: dict[tuple[SourceType, str], Dataset] = {
+    (source, tag): Dataset(_build_dataset_uri(source, tag))
+    for source, tag, _ in get_all_streams()
+}
+
+
+def _get_datasets_for_source(source: SourceType) -> list[Dataset]:
+    """Get all silver datasets for a given source type."""
+    return [
+        dataset
+        for (src, _tag), dataset in SILVER_DATASETS.items()
+        if src == source
+    ]
+
+
 def create_source_dag(
-    source: SourceTag,
+    source: SourceType,
+    tag: str,
     schedule: timedelta,
     outlet_dataset: Dataset,
-):
+) -> None:
+    """Factory function to create a source DAG (bronze → silver)."""
+
     @dag(
-        dag_id=f"reddit_{source}_pipeline",
-        description=f"Fetch {source} subreddits: Bronze → Silver",
+        dag_id=f"lemmy_{source}_{tag}_pipeline",
+        description=f"Fetch {source}/{tag} from Lemmy: Bronze → Silver",
         schedule=schedule,
         start_date=datetime(2026, 1, 1),
         catchup=False,
         default_args=DEFAULT_ARGS,
-        tags=["reddit", "etl", source],
+        tags=["lemmy", "etl", source, tag],
     )
-    def source_pipeline():
+    def source_pipeline() -> None:
         @task
-        def bronze():
-            create_bronze_source(source)
+        def bronze() -> None:
+            create_bronze_source(source, tag)
 
         @task(outlets=[outlet_dataset])
-        def silver():
-            create_silver_source(source)
+        def silver() -> None:
+            create_silver_source(source, tag)
 
         bronze() >> silver()
 
-    return source_pipeline()
+    # Register DAG in globals so Airflow discovers it
+    dag_instance = source_pipeline()
+    globals()[f"lemmy_{source}_{tag}_dag"] = dag_instance
 
 
-reddit_popular_dag = create_source_dag(
-    source=SourceTag.POPULAR,
-    schedule=timedelta(days=1),
-    outlet_dataset=SILVER_POPULAR_DATASET,
-)
+def create_gold_dag(source: SourceType) -> None:
+    """Factory function to create a gold DAG triggered by all silver datasets."""
+    trigger_datasets = _get_datasets_for_source(source)
 
-reddit_new_dag = create_source_dag(
-    source=SourceTag.NEW,
-    schedule=timedelta(days=1),
-    outlet_dataset=SILVER_NEW_DATASET,
-)
+    @dag(
+        dag_id=f"lemmy_{source}_gold_pipeline",
+        description=f"Merge all {source} Silver sources into Gold layer",
+        schedule=trigger_datasets,
+        start_date=datetime(2026, 1, 1),
+        catchup=False,
+        default_args=DEFAULT_ARGS,
+        tags=["lemmy", "etl", "gold", source],
+    )
+    def gold_pipeline() -> None:
+        @task
+        def merge_to_gold() -> None:
+            create_gold(source)
 
-reddit_hot_dag = create_source_dag(
-    source=SourceTag.HOT,
-    schedule=timedelta(hours=1),
-    outlet_dataset=SILVER_HOT_DATASET,
-)
+        merge_to_gold()
 
-reddit_rising_dag = create_source_dag(
-    source=SourceTag.RISING,
-    schedule=timedelta(hours=2),
-    outlet_dataset=SILVER_RISING_DATASET,
-)
-
-
-@dag(
-    dag_id="reddit_gold_pipeline",
-    description="Merge all Silver sources into Gold layer",
-    schedule=ALL_SILVER_DATASETS,
-    start_date=datetime(2026, 1, 1),
-    catchup=False,
-    default_args=DEFAULT_ARGS,
-    tags=["reddit", "etl", "gold"],
-)
-def reddit_gold_pipeline():
-    @task
-    def merge_to_gold():
-        """Read all Silver sources, merge, and save to Gold layer."""
-        create_gold()
-
-    merge_to_gold()
+    dag_instance = gold_pipeline()
+    globals()[f"lemmy_{source}_gold_dag"] = dag_instance
 
 
-reddit_gold_dag = reddit_gold_pipeline()
+for source, tag, _config in get_all_streams():
+    schedule = TAG_SCHEDULES.get(tag, timedelta(days=1))
+    outlet_dataset = SILVER_DATASETS[(source, tag)]
+    create_source_dag(source, tag, schedule, outlet_dataset)
+
+for source in SOURCES:
+    create_gold_dag(source)
