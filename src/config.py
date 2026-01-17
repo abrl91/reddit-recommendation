@@ -1,3 +1,4 @@
+import os
 from datetime import UTC, datetime
 from functools import lru_cache
 from pathlib import Path
@@ -7,9 +8,10 @@ import yaml
 
 
 DataLayer = Literal["bronze", "silver", "gold"]
+SourceType = Literal["posts", "communities"]
 
 
-class BucketsConfig(TypedDict, total=False):
+class BucketsConfig(TypedDict):
     bronze: str
     silver: str
     gold: str
@@ -20,14 +22,20 @@ class S3Config(TypedDict):
     buckets: BucketsConfig
 
 
-class DataPathConfig(TypedDict):
-    layer: DataLayer
-    prefix: str
+class StreamConfig(TypedDict):
+    sort: str
+    limit: int
+
+
+class GoldConfig(TypedDict):
+    tags: list[str]
 
 
 class Config(TypedDict):
+    lemmy_api_base_url: str
     s3: S3Config
-    data_paths: dict[str, DataPathConfig]
+    data_streams: dict[SourceType, dict[str, StreamConfig]]
+    gold: dict[SourceType, GoldConfig]
 
 
 @lru_cache
@@ -50,19 +58,69 @@ def get_s3_region() -> str:
     return config["s3"]["region"]
 
 
-def get_data_path(data_type_key: str) -> tuple[str, str]:
-    """Returns (bucket_name, prefix). Raises KeyError if data_type not found."""
+def is_localstack() -> bool:
+    return os.environ.get("USE_LOCALSTACK", "").lower() in ("1", "true", "yes")
+
+
+def get_s3_endpoint_url() -> str | None:
+    if is_localstack():
+        return os.environ.get("LOCALSTACK_ENDPOINT", "http://localhost:4566")
+    return None
+
+
+def get_lemmy_base_url() -> str:
     config = get_config()
-    data_config = config["data_paths"][data_type_key]
-    bucket = get_s3_bucket(data_config["layer"])
-    prefix = data_config["prefix"]
+    return config["lemmy_api_base_url"]
+
+
+def get_stream_config(source: SourceType, tag: str) -> StreamConfig:
+    """Raises KeyError if source/tag combination not found."""
+    config = get_config()
+    return config["data_streams"][source][tag]
+
+
+def get_stream_path(source: SourceType, tag: str) -> str:
+    return f"{source}/{tag}"
+
+
+SOURCES: tuple[SourceType, ...] = ("posts", "communities")
+
+
+def get_all_streams() -> list[tuple[SourceType, str, StreamConfig]]:
+    config = get_config()
+    result: list[tuple[SourceType, str, StreamConfig]] = []
+    for source in SOURCES:
+        for tag, stream_config in config["data_streams"][source].items():
+            result.append((source, tag, stream_config))
+    return result
+
+
+def get_bronze_location(source: SourceType, tag: str) -> tuple[str, str]:
+    bucket = get_s3_bucket("bronze")
+    prefix = get_stream_path(source, tag)
     return bucket, prefix
+
+
+def get_silver_location(source: SourceType, tag: str) -> tuple[str, str]:
+    bucket = get_s3_bucket("silver")
+    prefix = get_stream_path(source, tag)
+    return bucket, prefix
+
+
+def get_gold_location(source: SourceType) -> tuple[str, str]:
+    bucket = get_s3_bucket("gold")
+    return bucket, source
+
+
+def get_gold_tags(source: SourceType) -> list[str]:
+    config = get_config()
+    return config["gold"][source]["tags"]
 
 
 def get_partition_path(
     prefix: str, date: datetime | None = None, include_hour: bool = False
 ) -> str:
-    """Returns a Hive-style partition path with optional hour granularity."""
+    """Returns Hive-style path: prefix/year=.../month=.../day=.../[hour=...]"""
     dt = date or datetime.now(UTC)
     path = f"{prefix}/year={dt.year}/month={dt.month:02d}/day={dt.day:02d}"
     if include_hour:

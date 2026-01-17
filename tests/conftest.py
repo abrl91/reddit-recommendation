@@ -4,84 +4,85 @@ from unittest.mock import MagicMock
 import polars as pl
 import pytest
 
-from src.models.reddit import SubredditListingResponse
+from src.models import LemmyListingResponse, LemmyPostResponse
 
 
 @pytest.fixture
-def sample_subreddit_data() -> dict[str, Any]:
-    """Single subreddit record as returned by Reddit API."""
+def sample_community_data() -> dict[str, Any]:
+    """Single community record as returned by Lemmy API."""
     return {
-        "display_name": "Python",
-        "title": "Python Programming",
-        "public_description": "News about Python",
-        "subscribers": 1500000,
-        "over18": False,
-        "url": "/r/Python/",
-        "created_utc": 1234567890.0,
+        "community": {
+            "id": 1,
+            "name": "python",
+            "title": "Python Programming",
+            "description": "News about Python",
+            "nsfw": False,
+            "actor_id": "https://lemmy.world/c/python",
+            "published": "2023-01-01T12:00:00Z",
+        },
+        "counts": {
+            "subscribers": 1500000,
+        },
     }
 
 
 @pytest.fixture
-def sample_subreddit_response(sample_subreddit_data: dict[str, Any]) -> SubredditListingResponse:
-    """Valid Reddit API response with one subreddit."""
+def sample_community_response(
+    sample_community_data: dict[str, Any],
+) -> LemmyListingResponse:
+    """Valid Lemmy API response with one community."""
+    return {"communities": [sample_community_data]}
+
+
+@pytest.fixture
+def sample_post_data() -> dict[str, Any]:
+    """Single post record as returned by Lemmy API."""
     return {
-        "kind": "Listing",
-        "data": {
-            "children": [
-                {"kind": "t5", "data": sample_subreddit_data}
-            ]
-        }
+        "post": {
+            "id": 123,
+            "name": "Test Post Title",
+            "body": "This is the post body",
+            "url": "https://example.com/article",
+            "published": "2023-06-15T10:30:00Z",
+        },
+        "community": {
+            "id": 1,
+            "name": "python",
+        },
+        "creator": {
+            "id": 42,
+        },
+        "counts": {
+            "score": 150,
+            "comments": 25,
+        },
     }
 
 
 @pytest.fixture
-def sample_subreddit_response_multiple() -> SubredditListingResponse:
-    """Reddit API response with multiple subreddits for testing extraction."""
-    return {
-        "kind": "Listing",
-        "data": {
-            "children": [
-                {
-                    "kind": "t5",
-                    "data": {
-                        "display_name": "Python",
-                        "title": "Python Programming",
-                        "public_description": "News about Python",
-                        "subscribers": 1500000,
-                        "over18": False,
-                        "url": "/r/Python/",
-                        "created_utc": 1234567890.0,
-                    }
-                },
-                {
-                    "kind": "t5",
-                    "data": {
-                        "display_name": "learnpython",
-                        "title": "Learn Python",
-                        "public_description": "Subreddit for learning Python",
-                        "subscribers": 800000,
-                        "over18": False,
-                        "url": "/r/learnpython/",
-                        "created_utc": 1300000000.0,
-                    }
-                },
-            ]
-        }
-    }
+def sample_post_response(sample_post_data: dict[str, Any]) -> LemmyPostResponse:
+    """Valid Lemmy API response with one post."""
+    return {"posts": [sample_post_data]}
 
 
 @pytest.fixture
-def sample_extracted_dataframe() -> pl.DataFrame:
+def sample_extracted_community_df() -> pl.DataFrame:
     """DataFrame as it looks after extraction from API response."""
-    return pl.DataFrame({
-        "subreddit_name": ["Python", "learnpython"],
-        "title": ["Python Programming", "Learn Python"],
-        "description": ["News about Python", "Subreddit for learning Python"],
-        "subscribers": [1500000, 800000],
-        "is_nsfw": [False, False],
-        "url": ["/r/Python/", "/r/learnpython/"],
-        "created_date": [1234567890.0, 1300000000.0],
-    })
+    return pl.DataFrame(
+        {
+            "community_name": ["python", "learnpython"],
+            "title": ["Python Programming", "Learn Python"],
+            "description": ["News about Python", "Subreddit for learning Python"],
+            "subscribers": [1500000, 800000],
+            "is_nsfw": [False, False],
+            "url": [
+                "https://lemmy.world/c/python",
+                "https://lemmy.world/c/learnpython",
+            ],
+            "published_date": ["2023-01-01T12:00:00Z", "2023-02-01T12:00:00Z"],
+            "instance": ["lemmy.world", "lemmy.world"],
+        }
+    )
 
 
 @pytest.fixture

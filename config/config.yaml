@@ -1,40 +1,67 @@
+lemmy_api_base_url: "https://lemmy.world/api/v3"
+
 s3:
   region: "us-east-1"
   buckets:
-    bronze: "reddit-data-bronze-d271225"
-    silver: "reddit-data-silver-d010126"
-    gold: "reddit-data-gold-d090126"
+    bronze: "lemmy-bronze-data"
+    silver: "lemmy-silver-data"
+    gold: "lemmy-gold-data"
 
-data_paths:
-  # Bronze - raw API responses (one per source)
-  raw_subreddits_popular:
-    layer: bronze
-    prefix: "subreddits/popular"
-  raw_subreddits_new:
-    layer: bronze
-    prefix: "subreddits/new"
-  raw_subreddits_hot:
-    layer: bronze
-    prefix: "subreddits/hot"
-  raw_subreddits_rising:
-    layer: bronze
-    prefix: "subreddits/rising"
+data_streams:
+  posts:
+    hot:
+      sort: Hot
+      limit: 50
+    scaled:
+      sort: Scaled
+      limit: 50
+    new:
+      sort: New
+      limit: 50
+    active:
+      sort: Active
+      limit: 50
+    top_day:
+      sort: TopDay
+      limit: 50
+    top_week:
+      sort: TopWeek
+      limit: 50
+    top_month:
+      sort: TopMonth
+      limit: 50
+    top_year:
+      sort: TopYear
+      limit: 50
+    top_all:
+      sort: TopAll
+      limit: 50
+    most_comments:
+      sort: MostComments
+      limit: 50
 
-  # Silver - cleaned data (one per source, NOT merged)
-  cleaned_subreddits_popular:
-    layer: silver
-    prefix: "subreddits/popular"
-  cleaned_subreddits_new:
-    layer: silver
-    prefix: "subreddits/new"
-  cleaned_subreddits_hot:
-    layer: silver
-    prefix: "subreddits/hot"
-  cleaned_subreddits_rising:
-    layer: silver
-    prefix: "subreddits/rising"
+  communities:
+    hot:
+      sort: Hot
+      limit: 25
+    new:
+      sort: New
+      limit: 25
+    active:
+      sort: Active
+      limit: 25
+    top_day:
+      sort: TopDay
+      limit: 25
+    top_week:
+      sort: TopWeek
+      limit: 25
+    top_month:
+      sort: TopMonth
+      limit: 25
 
-  # Gold - merged and deduplicated business data
-  merged_subreddits:
-    layer: gold
-    prefix: "subreddits"
+gold:
+  communities:
+    tags: [hot, new, active, top_day, top_week, top_month]
+  posts:
+    tags: [hot, new, scaled, active, top_day, top_week, top_month, top_year, top_all, most_comments]

@@ -7,20 +7,20 @@ import pytest
 from botocore.exceptions import ClientError
 
 from src.storage.exceptions import StorageError
-from src.storage.write import save_json_to_s3, save_parquet_to_s3
+from src.storage.write import save_bronze, save_gold, save_silver
 
 
-class TestSaveJsonToS3:
+class TestSaveBronze:
     def test_uploads_to_correct_partition_path(self, mocker: Any) -> None:
         """Should upload to Hive-style partition path."""
         mock_client = MagicMock()
         mocker.patch("boto3.client", return_value=mock_client)
 
-        data = {"kind": "Listing", "data": {"children": []}}
+        data = {"posts": [{"post": {"id": 1}}]}
 
         with patch("src.storage.write.get_partition_path") as mock_path:
-            mock_path.return_value = "popular_subreddits/year=2025/month=01/day=07"
-            save_json_to_s3(data, "raw_subreddits_popular")
+            mock_path.return_value = "posts/hot/year=2025/month=01/day=07/hour=14"
+            save_bronze(data, "posts", "hot", include_hour=True)  # type: ignore[arg-type]
 
         mock_client.put_object.assert_called_once()
         call_kwargs = mock_client.put_object.call_args[1]
@@ -33,16 +33,15 @@ class TestSaveJsonToS3:
         mock_client = MagicMock()
         mocker.patch("boto3.client", return_value=mock_client)
 
-        data = {"kind": "Listing", "data": {"children": []}}
+        data = {"communities": [{"community": {"name": "test"}}]}
 
         with patch("src.storage.write.get_partition_path") as mock_path:
-            mock_path.return_value = "prefix/year=2025/month=01/day=07"
-            save_json_to_s3(data, "raw_subreddits_popular")
+            mock_path.return_value = "communities/hot/year=2025/month=01/day=07"
+            save_bronze(data, "communities", "hot")  # type: ignore[arg-type]
 
         call_kwargs = mock_client.put_object.call_args[1]
         body = call_kwargs["Body"]
 
-        # Should be valid JSON that matches input
         assert json.loads(body) == data
 
     def test_client_error_raises_storage_error(self, mocker: Any) -> None:
@@ -56,13 +55,13 @@ class TestSaveJsonToS3:
 
         with pytest.raises(StorageError) as exc_info:
             with patch("src.storage.write.get_partition_path") as mock_path:
-                mock_path.return_value = "prefix/year=2025/month=01/day=07"
-                save_json_to_s3({"data": "test"}, "raw_subreddits_popular")
+                mock_path.return_value = "posts/hot/year=2025/month=01/day=07"
+                save_bronze({"posts": []}, "posts", "hot")  # type: ignore[arg-type]
 
-        assert "Failed to save JSON" in str(exc_info.value)
+        assert "Failed to save bronze" in str(exc_info.value)
 
 
-class TestSaveParquetToS3:
+class TestSaveSilver:
     def test_saves_dataframe_to_correct_path(self, mocker: Any) -> None:
         """DataFrame should be saved to Hive-style partition path."""
         mock_write = mocker.patch.object(pl.DataFrame, "write_parquet")
@@ -70,8 +69,8 @@ class TestSaveParquetToS3:
         df = pl.DataFrame({"col1": [1, 2, 3]})
 
         with patch("src.storage.write.get_partition_path") as mock_path:
-            mock_path.return_value = "popular_subreddits/year=2025/month=01/day=07"
-            save_parquet_to_s3(df, "cleaned_subreddits_popular")
+            mock_path.return_value = "posts/hot/year=2025/month=01/day=07/hour=14"
+            save_silver(df, "posts", "hot", include_hour=True)
 
         mock_write.assert_called_once()
         s3_path = mock_write.call_args[0][0]
@@ -79,18 +78,6 @@ class TestSaveParquetToS3:
         assert "s3://" in s3_path
         assert "year=2025" in s3_path
         assert s3_path.endswith("/data.parquet")
-
-    def test_converts_list_of_dicts_to_dataframe(self, mocker: Any) -> None:
-        """List of dicts should be converted to DataFrame before saving."""
-        mock_write = mocker.patch.object(pl.DataFrame, "write_parquet")
-
-        data = [{"name": "test1"}, {"name": "test2"}]
-
-        with patch("src.storage.write.get_partition_path") as mock_path:
-            mock_path.return_value = "prefix/year=2025/month=01/day=07"
-            save_parquet_to_s3(data, "cleaned_subreddits_popular")
-
-        mock_write.assert_called_once()
 
     def test_write_error_raises_storage_error(self, mocker: Any) -> None:
         """Parquet write errors should be wrapped in StorageError."""
@@ -104,7 +91,25 @@ class TestSaveParquetToS3:
 
         with pytest.raises(StorageError) as exc_info:
             with patch("src.storage.write.get_partition_path") as mock_path:
-                mock_path.return_value = "prefix/year=2025/month=01/day=07"
-                save_parquet_to_s3(df, "cleaned_subreddits_popular")
+                mock_path.return_value = "posts/hot/year=2025/month=01/day=07"
+                save_silver(df, "posts", "hot")
 
-        assert "Failed to save parquet" in str(exc_info.value)
+        assert "Failed to save silver" in str(exc_info.value)
+
+
+class TestSaveGold:
+    def test_saves_to_source_prefix_without_tag(self, mocker: Any) -> None:
+        """Gold should be saved using source as prefix (no tag)."""
+        mock_write = mocker.patch.object(pl.DataFrame, "write_parquet")
+
+        df = pl.DataFrame({"community_name": ["python"], "sources": [["hot", "new"]]})
+
+        with patch("src.storage.write.get_partition_path") as mock_path:
+            mock_path.return_value = "communities/year=2025/month=01/day=07"
+            save_gold(df, "communities")
+
+        mock_write.assert_called_once()
+        s3_path = mock_write.call_args[0][0]
+
+        assert "communities" in s3_path
+        assert "hot" not in s3_path  # No tag in gold path

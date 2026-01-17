@@ -1,5 +1,4 @@
 class TransformationError(Exception):
-
     def __init__(
         self, message: str, step: str | None = None, record_count: int | None = None
     ):

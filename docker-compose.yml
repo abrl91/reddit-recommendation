@@ -1,0 +1,15 @@
+services:
+  localstack:
+    image: localstack/localstack:latest
+    ports:
+      - "4566:4566"  # LocalStack Gateway
+    environment:
+      - SERVICES=s3
+      - DEBUG=0
+      - PERSISTENCE=1  # Keep data between restarts
+    volumes:
+      - localstack_data:/var/lib/localstack
+      - ./scripts/init-localstack.sh:/etc/localstack/init/ready.d/init-aws.sh
+
+volumes:
+  localstack_data:

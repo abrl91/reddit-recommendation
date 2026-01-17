@@ -25,7 +25,9 @@ class TestPipelineStep:
 
     def test_preserves_transformation_error_without_double_wrapping(self) -> None:
         """TransformationError should be re-raised as-is, not double-wrapped."""
-        original_error = TransformationError("original error", step="original_step", record_count=3)
+        original_error = TransformationError(
+            "original error", step="original_step", record_count=3
+        )
 
         with pytest.raises(TransformationError) as exc_info:
             with pipeline_step("outer_step", record_count=10):

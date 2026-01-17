@@ -1,15 +1,21 @@
-from src.models.reddit import (
-    SourceTag,
-    SubredditChild,
-    SubredditData,
-    SubredditListingData,
-    SubredditListingResponse,
+from src.models.lemmy import (
+    CommunityData,
+    LemmyListingResponse,
+    LemmyPostResponse,
+    PostData,
+    RawCommunityView,
+    RawListingResponse,
+    RawPostResponse,
+    RawPostView,
 )
 
 __all__ = [
-    "SourceTag",
-    "SubredditChild",
-    "SubredditData",
-    "SubredditListingData",
-    "SubredditListingResponse",
+    "CommunityData",
+    "LemmyListingResponse",
+    "LemmyPostResponse",
+    "PostData",
+    "RawCommunityView",
+    "RawListingResponse",
+    "RawPostResponse",
+    "RawPostView",
 ]

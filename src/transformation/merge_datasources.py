@@ -1,32 +1,28 @@
 import polars as pl
 import structlog
 
-from src.models import SourceTag
 from src.transformation.context import pipeline_step
 from src.transformation.quality import validate_and_clean
 
 logger = structlog.get_logger().bind(module="gold")
 
 
-def merge_silver_sources(silver_data: dict[SourceTag, pl.DataFrame]) -> pl.DataFrame:
-    """
-    Merge all Silver sources into Gold, deduplicating by subreddit_name.
-    Subreddits appearing in multiple sources get all source tags in a list.
-    """
+def merge_silver_sources(silver_data: dict[str, pl.DataFrame]) -> pl.DataFrame:
+    """Deduplicates by community_name, aggregates source tags into list."""
     if not silver_data:
         logger.warning("No silver sources provided for Gold merge")
         return pl.DataFrame()
 
     logger.info(
         "Starting Gold merge",
-        sources=list(silver_data.keys()),
-        source_counts={s.value: len(df) for s, df in silver_data.items()},
+        tags=list(silver_data.keys()),
+        tag_counts={tag: len(df) for tag, df in silver_data.items()},
     )
 
     dfs: list[pl.DataFrame] = []
-    for source, df in silver_data.items():
+    for tag, df in silver_data.items():
         if df.is_empty():
-            logger.warning("Empty DataFrame for source", source=source)
+            logger.warning("Empty DataFrame for tag", tag=tag)
             continue
         dfs.append(df)
 
@@ -42,10 +38,10 @@ def merge_silver_sources(silver_data: dict[SourceTag, pl.DataFrame]) -> pl.DataF
 
     with pipeline_step("deduplicate_and_aggregate", record_count=total_records):
         non_key_cols = [
-            c for c in combined.columns if c not in ("subreddit_name", "source")
+            c for c in combined.columns if c not in ("community_name", "source")
         ]
 
-        merged = combined.group_by("subreddit_name").agg(
+        merged = combined.group_by("community_name").agg(
             [pl.col(c).first() for c in non_key_cols]
             + [pl.col("source").alias("sources")]
         )
@@ -53,7 +49,7 @@ def merge_silver_sources(silver_data: dict[SourceTag, pl.DataFrame]) -> pl.DataF
     unique_count = len(merged)
     logger.info(
         "Gold merge complete",
-        unique_subreddits=unique_count,
+        unique_communities=unique_count,
         duplicates_merged=total_records - unique_count,
     )
 
