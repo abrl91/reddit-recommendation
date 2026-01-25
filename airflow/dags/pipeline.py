@@ -74,7 +74,16 @@ def create_source_dag(
     schedule: timedelta,
     outlet_dataset: Dataset,
 ) -> None:
-    """Factory function to create a source DAG (bronze → silver)."""
+    """
+    Factory function to create a source DAG (bronze → silver).
+
+    schedule=schedule means that the DAG will be triggered on a schedule.
+
+    outlets=[outlet_dataset] means that the DAG will update the outlet_dataset when it is triggered. 
+            The task runs, writes to S3, and tells Airflow: "Hey, this dataset is fresh now!" → Gold DAG triggers
+
+    catchup=False means that the DAG will not run for past dates. We only care about fresh data and we don't want airflow to run backfills every time we start the EC2
+    """
 
     @dag(
         dag_id=f"lemmy_{source}_{tag}_pipeline",
@@ -102,7 +111,14 @@ def create_source_dag(
 
 
 def create_gold_dag(source: SourceType) -> None:
-    """Factory function to create a gold DAG triggered by all silver datasets."""
+    """
+    Factory function to create a gold DAG triggered by all silver datasets.
+
+    schedule=trigger_datasets means that the DAG will be triggered when ANY of the silver datasets are updated.
+
+    catchup=False means that the DAG will not run for past dates. 
+            We only care about fresh data and we don't want airflow to run backfills every time we start the EC2
+    """
     trigger_datasets = _get_datasets_for_source(source)
 
     @dag(
