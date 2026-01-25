@@ -5,7 +5,10 @@ from src.transformation.transform import fill_nulls
 
 class TestFillNulls:
     def test_applies_default_values_to_community_nulls(self) -> None:
-        """Null values should be filled with appropriate defaults."""
+        """Null values should be filled with appropriate defaults.
+
+        Note: url is NOT filled - it's derived from actor_id in earlier transformation.
+        """
         df = pl.DataFrame(
             {
                 "community_name": [None],
@@ -36,12 +39,15 @@ class TestFillNulls:
         assert result["description"][0] == ""
         assert result["subscribers"][0] == 0
         assert result["is_nsfw"][0] is False
-        assert result["url"][0] == ""
+        assert result["url"][0] is None  # Derived from actor_id, not filled here
         assert result["created_date"][0] == ""
         assert result["instance"][0] == "unknown"
 
     def test_applies_default_values_to_post_nulls(self) -> None:
-        """Post-specific null values should be filled."""
+        """Post-specific null values should be filled.
+
+        Note: body stays None - it's semantically nullable (link posts may have no body).
+        """
         df = pl.DataFrame(
             {
                 "body": [None],
@@ -57,7 +63,7 @@ class TestFillNulls:
 
         result = fill_nulls(df)
 
-        assert result["body"][0] == ""
+        assert result["body"][0] is None  # Semantically nullable (link posts)
         assert result["score"][0] == 0
         assert result["num_comments"][0] == 0
 
