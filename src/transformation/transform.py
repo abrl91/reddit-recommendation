@@ -29,6 +29,13 @@ def add_metadata(df: pl.DataFrame) -> pl.DataFrame:
     return df.with_columns(pl.lit(datetime.now(UTC).isoformat()).alias("processed_at"))
 
 
+def add_lineage(df: pl.DataFrame, source_file: str, run_id: str) -> pl.DataFrame:
+    return df.with_columns([
+        pl.lit(source_file).alias("source_file"),
+        pl.lit(run_id).alias("run_id"),
+    ])
+
+
 def log_null_stats(df: pl.DataFrame) -> pl.DataFrame:
     total_rows = len(df)
     null_counts = {
@@ -109,9 +116,18 @@ def fill_nulls(df: pl.DataFrame) -> pl.DataFrame:
 
 
 def clean_source_data(
-    response: RawPostResponse | RawListingResponse, source: SourceType, tag: str
+    response: RawPostResponse | RawListingResponse,
+    source: SourceType,
+    tag: str,
+    source_file: str,
+    run_id: str,
 ) -> pl.DataFrame:
-    logger.info("Starting single-source transformation", source=source, tag=tag)
+    logger.info(
+        "Starting single-source transformation",
+        source=source,
+        tag=tag,
+        run_id=run_id,
+    )
 
     with pipeline_step("extract", record_count=1):
         df = extract_with_source(response, source, tag)
@@ -132,6 +148,9 @@ def clean_source_data(
     with pipeline_step("add_metadata", record_count):
         df = df.pipe(add_metadata)
 
+    with pipeline_step("add_lineage", record_count):
+        df = add_lineage(df, source_file, run_id)
+
     with pipeline_step("log_null_stats", record_count):
         df = df.pipe(log_null_stats)
 
@@ -146,6 +165,7 @@ def clean_source_data(
         "Single-source transformation complete",
         source=source,
         tag=tag,
+        run_id=run_id,
         output_records=final_count,
         dropped_records=record_count - final_count,
     )

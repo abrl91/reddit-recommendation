@@ -16,12 +16,12 @@ Dataset Flow:
     ...                                          ┘
 """
 
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 
 from airflow.datasets import Dataset
 from airflow.decorators import dag, task
 
-from src import create_bronze_source, create_gold, create_silver_source
+from src import RunContext, create_bronze_source, create_gold, create_silver_source
 from src.config import SOURCES, SourceType, get_all_streams, get_s3_bucket
 
 TAG_SCHEDULES: dict[str, timedelta] = {
@@ -96,12 +96,16 @@ def create_source_dag(
     )
     def source_pipeline() -> None:
         @task
-        def bronze() -> None:
-            create_bronze_source(source, tag)
+        def bronze(**context: object) -> None:
+            airflow_run_id = str(context["run_id"])  # type: ignore[index]
+            run_ctx = RunContext(run_id=airflow_run_id, started_at=datetime.now(UTC))
+            create_bronze_source(source, tag, run_ctx)
 
         @task(outlets=[outlet_dataset])
-        def silver() -> None:
-            create_silver_source(source, tag)
+        def silver(**context: object) -> None:
+            airflow_run_id = str(context["run_id"])  # type: ignore[index]
+            run_ctx = RunContext(run_id=airflow_run_id, started_at=datetime.now(UTC))
+            create_silver_source(source, tag, run_ctx)
 
         bronze() >> silver()
 
@@ -132,8 +136,10 @@ def create_gold_dag(source: SourceType) -> None:
     )
     def gold_pipeline() -> None:
         @task
-        def merge_to_gold() -> None:
-            create_gold(source)
+        def merge_to_gold(**context: object) -> None:
+            airflow_run_id = str(context["run_id"])  # type: ignore[index]
+            run_ctx = RunContext(run_id=airflow_run_id, started_at=datetime.now(UTC))
+            create_gold(source, run_ctx)
 
         merge_to_gold()
 

@@ -18,7 +18,7 @@ def _get_dedup_key(columns: list[str]) -> DedupKey:
     return "community_name"
 
 
-def merge_silver_sources(silver_data: dict[str, pl.DataFrame]) -> pl.DataFrame:
+def merge_silver_sources(silver_data: dict[str, pl.DataFrame], run_id: str) -> pl.DataFrame:
     """Deduplicates by primary key (post_id or community_name), aggregates source tags."""
     if not silver_data:
         logger.warning("No silver sources provided for Gold merge")
@@ -28,6 +28,7 @@ def merge_silver_sources(silver_data: dict[str, pl.DataFrame]) -> pl.DataFrame:
         "Starting Gold merge",
         tags=list(silver_data.keys()),
         tag_counts={tag: len(df) for tag, df in silver_data.items()},
+        run_id=run_id,
     )
 
     dfs: list[pl.DataFrame] = []
@@ -60,12 +61,16 @@ def merge_silver_sources(silver_data: dict[str, pl.DataFrame]) -> pl.DataFrame:
             + [pl.col("source").alias("sources")]
         )
 
+    with pipeline_step("add_run_id", record_count=len(merged)):
+        merged = merged.with_columns(pl.lit(run_id).alias("run_id"))
+
     unique_count = len(merged)
     logger.info(
         "Gold merge complete",
         dedup_key=dedup_key,
         unique_records=unique_count,
         duplicates_merged=total_records - unique_count,
+        run_id=run_id,
     )
 
     with pipeline_step("validate_gold", record_count=unique_count):

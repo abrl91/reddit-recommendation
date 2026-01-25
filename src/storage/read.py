@@ -1,6 +1,7 @@
 import json
+from dataclasses import dataclass
 from datetime import datetime
-from typing import Any
+from typing import Any, cast
 
 import boto3
 import polars as pl
@@ -19,6 +20,14 @@ from src.config import (
 )
 from src.models import RawListingResponse, RawPostResponse
 from src.storage.exceptions import StorageError
+
+
+@dataclass
+class BronzeResult:
+    """Result from reading bronze layer, includes source key for lineage tracking."""
+
+    data: RawPostResponse | RawListingResponse
+    source_key: str  # e.g., "posts/hot/year=2025/month=01/day=25/hour=14/data.json"
 
 logger = structlog.get_logger().bind(module="storage")
 
@@ -54,12 +63,12 @@ def read_bronze(
     tag: str,
     date: datetime | None = None,
     include_hour: bool = True,
-) -> RawPostResponse | RawListingResponse | None:
+) -> BronzeResult | None:
     bucket, prefix = get_bronze_location(source, tag)
     partition_path = get_partition_path(prefix, date=date, include_hour=include_hour)
 
     s3_client = _get_s3_client()
-    results: list[RawListingResponse | RawPostResponse] = []
+    results: list[tuple[str, RawListingResponse | RawPostResponse]] = []
 
     try:
         paginator = s3_client.get_paginator("list_objects_v2")
@@ -77,8 +86,8 @@ def read_bronze(
                 try:
                     file_response = s3_client.get_object(Bucket=bucket, Key=key)
                     content = file_response["Body"].read().decode("utf-8")
-                    data: RawListingResponse = json.loads(content)
-                    results.append(data)
+                    data = cast(RawListingResponse | RawPostResponse, json.loads(content))
+                    results.append((key, data))
                 except Exception as e:
                     logger.error("Failed to read file from S3", key=key, error=str(e))
                     continue
@@ -98,12 +107,14 @@ def read_bronze(
                 tag=tag,
                 file_count=len(results),
             )
+        source_key, data = results[0]
         logger.info(
             "Bronze read from S3",
             bucket=bucket,
             partition=partition_path,
+            source_key=source_key,
         )
-        return results[0]
+        return BronzeResult(data=data, source_key=source_key)
 
     logger.warning("No bronze data found", source=source, tag=tag)
     return None

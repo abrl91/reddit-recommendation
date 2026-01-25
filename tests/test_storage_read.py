@@ -11,7 +11,7 @@ from src.storage.read import read_bronze, read_silver
 
 class TestReadBronze:
     def test_returns_data_from_json_file(self, mocker: Any) -> None:
-        """Should return parsed JSON data from S3 partition."""
+        """Should return BronzeResult with parsed JSON data and source key."""
         mock_client = MagicMock()
 
         mock_paginator = MagicMock()
@@ -34,7 +34,8 @@ class TestReadBronze:
             result = read_bronze("posts", "hot")
 
         assert result is not None
-        assert result["posts"][0]["post"]["name"] == "Test"
+        assert result.data["posts"][0]["post"]["name"] == "Test"
+        assert result.source_key == "posts/hot/year=2025/month=01/day=07/data.json"
 
     def test_returns_none_when_no_data(self, mocker: Any) -> None:
         """Should return None when partition has no files."""
