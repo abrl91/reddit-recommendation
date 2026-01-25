@@ -208,7 +208,7 @@ python -m src
 
 ## Current Milestone
 
-**M1, M2, M3.1, M3.2, M3.3 complete**. Next: M4 (User Feedback CLI).
+**M1, M2, M3.1, M3.2, M3.3 complete**. Next: MX (Engineering Excellence) - recommended before M4 to harden the data pipeline foundation. MX.1 (Data Lineage) is highest priority; MX.2 and MX.3 are optional if eager to start M4 (User Feedback CLI).
 
 ## Notes for Claude
 

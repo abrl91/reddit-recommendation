@@ -474,7 +474,7 @@ def lemmy_communities_gold_pipeline():
 - ✓ Failed tasks retry automatically
 - ✓ Code is clean and maintainable
 
-### M3.3 - EC2 Deployment (Optional)
+### M3.3 - EC2 Deployment ✅
 
 **Goal:** Deploy Airflow to AWS EC2 using Terraform for IaC learning.
 
@@ -499,10 +499,6 @@ EC2 (t3.medium) + Elastic IP
 └── IAM Role → S3 Access
 ```
 
-**Cost:**
-- Running 24/7: ~$33/month
-- Stopped (learning mode): ~$6/month
-
 **Success Criteria:**
 
 - Terraform provisions all resources successfully
@@ -510,9 +506,296 @@ EC2 (t3.medium) + Elastic IP
 - DAGs can be triggered and write to S3
 - Instance can be stopped/started without losing IP
 
-> **Note:** See `plans/ec2-deployment.md` for detailed implementation steps.
+---
 
-> **Note:** Lemmy API is public and doesn't block datacenter IPs, so EC2 can run the full pipeline including ingestion.
+### Milestone X: Engineering Excellence
+
+**Goal:** Harden the data pipeline with production-grade practices before adding new features. This milestone ensures the foundation is solid for the remaining work.
+
+### MX.1 - Data Lineage & Enrichment
+
+**What to build:**
+
+- **Data lineage tracking:**
+    - Add `source_file` column in silver layer (tracks which bronze file produced each record)
+    - Add `source_tags` array column in gold layer (tracks which silver tags contributed to each record)
+    - Add `run_id` to all layers (UUID for each pipeline execution, enables debugging)
+
+- **Silver layer enrichment (derived columns):**
+    - **Posts:**
+        - `engagement_ratio`: `upvotes / (upvotes + downvotes)` - quality signal (0.0-1.0)
+        - `comment_density`: `num_comments / max(score, 1)` - discussion activity
+        - `content_type`: 'text', 'link', or 'image' based on URL pattern
+        - `body_length`: character count for embeddings
+        - `age_hours`: hours since publication
+    - **Communities:**
+        - `description_length`: character count for embeddings
+        - `is_active_community`: `users_active_week > 10`
+        - `age_hours`: hours since creation
+
+**Code structure:**
+
+```python
+# src/transformation/enrich.py
+def enrich_posts(df: pl.DataFrame) -> pl.DataFrame:
+    return df.with_columns([
+        (pl.col("upvotes") / (pl.col("upvotes") + pl.col("downvotes")))
+        .fill_nan(0.5).alias("engagement_ratio"),
+        (pl.col("num_comments") / pl.col("score").clip(lower_bound=1))
+        .alias("comment_density"),
+        pl.when(pl.col("url").is_null())
+        .then(pl.lit("text"))
+        .when(pl.col("url").str.contains(r"\.(jpg|jpeg|png|gif|webp)$"))
+        .then(pl.lit("image"))
+        .otherwise(pl.lit("link"))
+        .alias("content_type"),
+        # ... body_length, age_hours
+    ])
+
+def enrich_communities(df: pl.DataFrame) -> pl.DataFrame:
+    return df.with_columns([
+        pl.col("description").fill_null("").str.len_chars().alias("description_length"),
+        (pl.col("users_active_week") > 10).alias("is_active_community"),
+        # ... age_hours
+    ])
+
+# src/transformation/transform.py
+def add_lineage(df: pl.DataFrame, source_file: str, run_id: str) -> pl.DataFrame:
+    return df.with_columns([
+        pl.lit(source_file).alias("source_file"),
+        pl.lit(run_id).alias("run_id"),
+    ])
+```
+
+**Success Criteria:**
+
+- ✓ Every silver record has `source_file` and `run_id` columns
+- ✓ Every gold record has `source_tags` array showing contributing sources
+- ✓ Posts have enrichment columns: `engagement_ratio`, `comment_density`, `content_type`, `body_length`, `age_hours`
+- ✓ Communities have enrichment columns: `description_length`, `is_active_community`, `age_hours`
+
+### MX.2 - Testing & CI/CD
+
+**What to build:**
+
+- **Integration tests with LocalStack:**
+    - End-to-end test: bronze → silver → gold with real S3 operations
+    - Verify Parquet schema matches expected (use `polars.testing`)
+    - Test deduplication logic with known inputs/outputs
+- **DAG validation tests:**
+    - Pytest tests that load all DAGs and verify no import errors
+    - Validate DAG structure (tasks exist, dependencies correct)
+- **Schema contract tests:**
+    - Define expected schemas in code
+    - Test that silver/gold outputs match contract
+- **GitHub Actions CI pipeline:**
+    - Run on every push and PR to main
+    - Jobs: `ruff check`, `ruff format --check`, `mypy`, `pytest`
+    - Fail PR if any check fails
+    - Free for public repos, 2000 min/month for private
+
+**Code structure:**
+
+```python
+# tests/integration/test_pipeline_e2e.py
+@pytest.fixture
+def localstack_s3():
+    # Setup LocalStack S3 client
+    yield s3_client
+    # Cleanup buckets
+
+def test_bronze_to_gold_pipeline(localstack_s3):
+    # 1. Write mock bronze JSON
+    # 2. Run silver transformation
+    # 3. Run gold merge
+    # 4. Assert output schema and content
+
+# tests/test_airflow_dags.py
+def test_all_dags_load_without_errors():
+    from airflow.models import DagBag
+    dag_bag = DagBag(dag_folder="airflow/dags", include_examples=False)
+    assert len(dag_bag.import_errors) == 0
+    assert len(dag_bag.dags) == 18  # 16 source + 2 gold
+
+def test_dag_dependencies():
+    # Verify gold DAGs depend on correct silver datasets
+```
+
+```yaml
+# .github/workflows/ci.yml
+name: CI
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install ruff
+      - run: ruff check src/
+      - run: ruff format --check src/
+
+  typecheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -e ".[dev]"
+      - run: mypy src/
+
+  test:
+    runs-on: ubuntu-latest
+    services:
+      localstack:
+        image: localstack/localstack
+        ports:
+          - 4566:4566
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -e ".[dev]"
+      - run: pytest tests/
+        env:
+          USE_LOCALSTACK: "true"
+```
+
+**Success Criteria:**
+
+- ✓ Integration tests pass against LocalStack
+- ✓ DAG validation tests catch import errors
+- ✓ Schema contract tests verify output structure
+- ✓ GitHub Actions runs on every push/PR
+- ✓ PRs blocked if ruff, mypy, or pytest fails
+
+### MX.3 - Infrastructure Hardening
+
+**What to build:**
+
+- **Terraform outputs (if M3.3 deployed):**
+    - Add outputs for EC2 IP, Airflow URL, bucket names
+    - Makes it easy to get connection info after `terraform apply`
+- **Task groups for UI clarity:**
+    - Group related tasks (bronze, silver) in Airflow UI
+    - Improves visibility when debugging
+- **Docker Compose improvements:**
+    - Add health checks for LocalStack and PostgreSQL
+    - Ensure services start in correct order
+    - Add restart policies for resilience
+
+> **Interview Note:** Remote state management (S3 + DynamoDB locking) and SLA monitoring are important for team/production environments, but overkill for a solo learning project. Be ready to explain *why* they matter: remote state prevents conflicts when multiple people run terraform; SLAs alert on-call when pipelines are late.
+
+**Code structure:**
+
+```python
+# airflow/dags/pipeline.py (updates)
+from airflow.utils.task_group import TaskGroup
+
+@dag(...)
+def lemmy_posts_hot_pipeline():
+    with TaskGroup("ingest") as ingest:
+        @task
+        def bronze():
+            ...
+
+        @task
+        def silver():
+            ...
+
+    bronze() >> silver()
+```
+
+```yaml
+# docker-compose.yml (updates)
+services:
+  localstack:
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4566/_localstack/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+```
+
+```hcl
+# terraform/outputs.tf (new file)
+output "airflow_url" {
+  value = "http://${aws_eip.airflow.public_ip}:8080"
+}
+output "ec2_public_ip" {
+  value = aws_eip.airflow.public_ip
+}
+```
+
+**Success Criteria:**
+
+- ✓ `terraform output` shows EC2 IP and Airflow URL
+- ✓ Task groups visible in Airflow UI
+- ✓ Docker services have health checks
+- ✓ Services restart on failure (restart: unless-stopped)
+
+### MX.4 - Schema Versioning
+
+**What to build:**
+
+- **Pipeline version tracking:**
+    - Add `pipeline_version` column to all layers (bronze, silver, gold)
+    - Use semantic versioning (e.g., `"1.0.0"`)
+    - Bump version when schema changes (new columns, type changes, removed columns)
+
+- **Versioning strategy:**
+    - Define version in single source of truth (`src/pipeline/version.py`)
+    - Include version in all transformations automatically
+    - Document schema changes in a changelog
+
+**Code structure:**
+
+```python
+# src/pipeline/version.py
+PIPELINE_VERSION = "1.0.0"
+
+# Version history:
+# 1.0.0 - Initial schema with lineage + enrichment (MX.1)
+```
+
+```python
+# src/transformation/transform.py
+from src.pipeline.version import PIPELINE_VERSION
+
+def add_lineage(df: pl.DataFrame, source_file: str, run_id: str) -> pl.DataFrame:
+    return df.with_columns([
+        pl.lit(source_file).alias("source_file"),
+        pl.lit(run_id).alias("run_id"),
+        pl.lit(PIPELINE_VERSION).alias("pipeline_version"),
+    ])
+```
+
+**When to bump versions:**
+
+| Change Type | Version Bump | Example |
+|-------------|--------------|---------|
+| New column added | Minor (1.0 → 1.1) | Adding `sentiment_score` |
+| Column type changed | Major (1.x → 2.0) | `score: int → float` |
+| Column removed | Major (1.x → 2.0) | Removing deprecated field |
+| Bug fix (no schema change) | Patch (1.0.0 → 1.0.1) | Fix null handling |
+
+**Success Criteria:**
+
+- ✓ Every record has `pipeline_version` column
+- ✓ Version is defined in single location
+- ✓ Schema changes are documented with version bumps
+
+> **Note:** MX can be done incrementally—MX.1 is highest priority as it affects data contracts. MX.2, MX.3, and MX.4 can be done in parallel or deferred if eager to start M4.
 
 ---
 
@@ -893,14 +1176,27 @@ EC2 (Airflow) ──────► RDS PostgreSQL
         - Accuracy over time (as user rates more)
         - Precision/recall curves
         - Confusion matrix for recommendations
-    - **Data Quality Metrics (deferred from M2):**
+    - **Data Quality Metrics Persistence:**
+        - Write quality metrics to S3 during transformation (null counts, dropped records, schema validation)
+        - Path: `s3://lemmy-gold-data/data_quality/year=YYYY/month=MM/day=DD/{run_id}_{source}_{tag}.json`
+        - Create `QualityMetrics` dataclass to capture: input/output records, null stats, business rule drops
+        - Integrate metric collection into `clean_source_data()` transformation
+    - **Data Quality Analytics Dashboard:**
         - API success rate
         - Data completeness over time (null rates, missing fields)
         - Processing pipeline health
         - Record count validation (bronze vs silver layer counts)
-        - Data quality report (CSV/JSON summary per run)
+        - Trending dashboard from `data_quality/` metrics
         - Anomaly detection: Alert when source returns unusual data volumes (e.g., 2 communities instead of ~25)
         - Cross-source validation: Stats about overlap between sources (e.g., "15% of communities appear in 3+ sources")
+    - **Data Lineage Visualization (uses MX.1 lineage):**
+        - Trace any gold record back through silver → bronze files
+        - Query by `run_id` to see all records from a specific pipeline execution
+        - Visualize source tag contributions to gold layer
+    - **Cost Monitoring (if deployed to AWS):**
+        - S3 storage costs by layer (bronze/silver/gold)
+        - EC2 runtime costs
+        - Airflow task duration trends (identify slow tasks)
 
 **Deliverables:**
 
@@ -1152,6 +1448,16 @@ Internet ──► ALB (HTTPS) ──► App Runner/ECS
 - **GraphQL API**: More flexible API for frontend
 - **Microservices**: Split into smaller services (ingestion, processing, recommendations)
 - **Multi-region Deployment**: Global CDN and edge computing
+
+### Production/Team Readiness
+
+- **Terraform Remote State**: S3 backend + DynamoDB locking for team collaboration and state conflict prevention
+- **Airflow SLA Monitoring**: `sla=timedelta()` on tasks with alerts when pipelines run late
+- **Secrets Management**: AWS Secrets Manager or HashiCorp Vault instead of environment variables
+- **CD Pipeline**: Automated deployment to EC2/ECS on merge to main (CI for tests/linting already in MX.2)
+- **Atomic Writes**: Write to temp file → copy to final → delete temp; prevents partial/corrupt files on S3 write failures
+- **Content-Hash Deduplication**: Hash API responses before writing to bronze; skip write if content unchanged from previous pull. Reduces redundant storage and processing when ingestion frequency > API refresh rate. More reliable than ETag/Last-Modified which many APIs don't support.
+- **Observability Stack**: Prometheus metrics, Grafana dashboards, distributed tracing
 
 ---
 
