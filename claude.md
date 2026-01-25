@@ -2,7 +2,7 @@
 
 ## Project Context
 
-This is a **Reddit Recommendation System** - a learning project to gain hands-on experience with data engineering, ML, and DevOps technologies.
+This is a **Lemmy Recommendation System** - a learning project to gain hands-on experience with data engineering, ML, and DevOps technologies.
 
 ### Developer Background
 - Backend engineer with ~6 years experience (frontend → fullstack → backend)
@@ -19,8 +19,8 @@ You are a **principal software engineer specializing in data engineering**. Your
 
 ## Project Overview
 
-A Reddit content recommendation system that:
-1. Fetches trending subreddits and posts from Reddit API
+A Lemmy content recommendation system that:
+1. Fetches trending communities and posts from Lemmy API
 2. Processes data through bronze → silver → gold layers (S3)
 3. Generates embeddings using Groq API
 4. Provides ML-powered recommendations based on user preferences
@@ -37,11 +37,11 @@ See `design.md` for detailed roadmap and milestones.
 
 ```python
 # Good
-def fetch_subreddits(limit: int = 25) -> list[SubredditData]:
+def fetch_communities(limit: int = 25) -> list[CommunityData]:
     ...
 
 # Bad
-def fetch_subreddits(limit=25):
+def fetch_communities(limit=25):
     ...
 ```
 
@@ -51,20 +51,35 @@ Use the right tool for the job:
 
 | Use Case | Tool | Why |
 |----------|------|-----|
-| External API responses (Reddit, etc.) | `TypedDict` | Schema may change, no runtime overhead, handle missing fields defensively in transformation |
+| External API responses (Lemmy, etc.) | `TypedDict` | Schema may change, no runtime overhead, handle missing fields defensively in transformation |
 | Internal data contracts you control | `TypedDict` or `dataclass` | Compile-time checks sufficient when you control both ends |
 | User input validation (FastAPI endpoints) | `Pydantic` | Need runtime validation, error messages, coercion |
 
 ```python
 # External API - use TypedDict (flexible, no runtime cost)
-class SubredditData(TypedDict, total=False):
-    display_name: str
+class CommunityData(TypedDict, total=False):
+    id: int
+    name: str
+    title: str
+    description: str | None
     subscribers: int
+    nsfw: bool
+    published: str
     # total=False: fields are optional, handle missing in transform
+
+class PostData(TypedDict, total=False):
+    id: int
+    name: str
+    body: str | None
+    url: str | None
+    community_id: int
+    community_name: str
+    score: int
+    num_comments: int
 
 # User input (M10+) - use Pydantic (runtime validation)
 class RatingRequest(BaseModel):
-    subreddit_name: str
+    community_name: str
     rating: Literal["like", "dislike"]
 ```
 
@@ -118,7 +133,7 @@ try:
     response = httpx.get(url, timeout=30)
     response.raise_for_status()
 except httpx.HTTPError as e:
-    logger.error("Reddit API request failed", url=url, error=str(e))
+    logger.error("Lemmy API request failed", url=url, error=str(e))
     raise IngestionError(f"Failed to fetch from {url}") from e
 
 # Bad
@@ -193,7 +208,7 @@ python -m src
 
 ## Current Milestone
 
-**M1, M2, M3.1, M3.2 complete**. Next: M4 (User Feedback CLI) or M3.3 (EC2 Deployment - optional).
+**M1, M2, M3.1, M3.2, M3.3 complete**. Next: M4 (User Feedback CLI).
 
 ## Notes for Claude
 

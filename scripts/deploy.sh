@@ -7,7 +7,7 @@
 #   --rebuild   Rebuild Docker images (needed if src/ changed)
 #
 # Prerequisites:
-#   - SSH key at ~/.ssh/reddit-airflow-key.pem
+#   - SSH key at ~/.ssh/lemmy-airflow-key.pem
 #   - terraform output to get the IP
 
 set -e  # Exit on error
@@ -49,16 +49,16 @@ fi
 
 # Execute deployment commands on EC2
 echo -e "${GREEN}1. Pulling latest code...${NC}"
-$SSH_CMD "cd /opt/reddit-recommendation && git pull"
+$SSH_CMD "cd /opt/lemmy-recommendation && git pull"
 
 if [ "$REBUILD" = true ]; then
     echo -e "${GREEN}2. Rebuilding Docker images...${NC}"
-    $SSH_CMD "cd /opt/reddit-recommendation/airflow && \
+    $SSH_CMD "cd /opt/lemmy-recommendation/airflow && \
         docker compose -f docker-compose.yaml -f docker-compose.prod.yaml build --no-cache"
 fi
 
 echo -e "${GREEN}3. Restarting services...${NC}"
-$SSH_CMD "cd /opt/reddit-recommendation/airflow && \
+$SSH_CMD "cd /opt/lemmy-recommendation/airflow && \
     docker compose -f docker-compose.yaml -f docker-compose.prod.yaml up -d"
 
 echo -e "${GREEN}4. Checking service status...${NC}"

@@ -1,4 +1,4 @@
-# Reddit Recommendation System
+# Lemmy Recommendation System
 
 ## Key Principles to Remember
 1. **MVP First**: Make it work before making it pretty
@@ -12,12 +12,12 @@
 
 ### What We're Building
 
-A Reddit content recommendation system that learns user preferences without requiring Reddit account connection. Users rate subreddits and posts (like/dislike), and the system suggests personalized content using machine learning embeddings and similarity matching.
+A Lemmy content recommendation system that learns user preferences. Users rate communities and posts (like/dislike), and the system suggests personalized content using machine learning embeddings and similarity matching.
 
 ### Core Features
 
-- **Data Pipeline**: Automated collection of trending Reddit content
-- **User Preference Learning**: CLI-based rating system for subreddits and posts
+- **Data Pipeline**: Automated collection of trending Lemmy content
+- **User Preference Learning**: CLI-based rating system for communities and posts
 - **Smart Recommendations**: ML-powered suggestions based on user preferences
 - **Cold Start Solution**: Begin with popular content, no account required
 - **Validation System**: Test and measure recommendation accuracy
@@ -69,7 +69,7 @@ A Reddit content recommendation system that learns user preferences without requ
 
 ```
 ┌─────────────┐
-│ Reddit API  │
+│ Lemmy API   │
 └──────┬──────┘
        │
        ▼
@@ -108,29 +108,25 @@ A Reddit content recommendation system that learns user preferences without requ
 
 **1. Data Ingestion Service**
 
-- Fetches trending subreddits from Reddit API
-- Pulls hot posts from selected subreddits
+- Fetches trending communities and posts from Lemmy API
 - Handles rate limiting and errors
 - Saves raw data to S3 bronze layer
 
-**Reddit API Endpoints:**
+**Lemmy API Endpoints:**
 
-| Endpoint | Returns | Use Case |
-|----------|---------|----------|
-| `/subreddits/popular.json` | Top by subscribers (stable) | Static "hall of fame" baseline |
-| `/subreddits/new.json` | Newly created subreddits | Discovering emerging communities |
-| `/r/popular/hot.json?sr_detail=true` | Hot posts with embedded subreddit data | Subreddits with trending content |
-| `/r/popular/rising.json?sr_detail=true` | Rising posts with embedded subreddit data | Subreddits gaining momentum |
+| Source Type | Sort Tags | Count |
+|-------------|-----------|-------|
+| Posts | hot, active, scaled, new, most_comments, top_day, top_week, top_month, top_year, top_all | 10 tags |
+| Communities | hot, active, new, top_day, top_week, top_month | 6 tags |
 
-**Strategy:** Four independent sources, merged in transformation with source tagging:
-1. **Popular** (`@daily`) - stable baseline, high subscriber count
-2. **New** (`@daily`) - freshly created communities
-3. **Hot** (`@hourly`) - subreddits with trending content right now
-4. **Rising** (`@2hours`) - subreddits with content gaining momentum
+**Strategy:** 16 independent source streams (10 posts + 6 communities), each with its own DAG:
+- **Every 3h**: hot, active, scaled
+- **Every 4h**: new
+- **Every 6h**: most_comments
+- **Every 8h**: top_day
+- **Every 12h**: top_week, top_month, top_year, top_all
 
-**Architecture:** Each source saved separately in bronze layer → transformation merges with source tags → silver layer output. This enables independent scheduling and fault isolation.
-
-Each subreddit gets tagged with its source(s): `["popular"]`, `["new"]`, `["hot"]`, `["rising"]`, or combinations like `["popular", "hot", "rising"]`.
+**Architecture:** Each source/tag combo saved separately in bronze layer → transformation creates silver layer output → gold DAGs merge by source type. This enables independent scheduling and fault isolation.
 
 **2. Data Processing Service**
 
@@ -141,7 +137,7 @@ Each subreddit gets tagged with its source(s): `["popular"]`, `["new"]`, `["hot"
 
 **3. Embedding Service**
 
-- Generates embeddings for subreddit descriptions
+- Generates embeddings for community descriptions
 - Generates embeddings for post content
 - Stores vectors in pgvector database
 - Handles batching and caching
@@ -214,41 +210,31 @@ Next Milestone
 
 ### Milestone 1: Get Data Flowing ✅
 
-**Goal:** Fetch trending subreddits from Reddit and save to S3. Prove the pipeline works.
+**Goal:** Fetch trending communities from Lemmy and save to S3. Prove the pipeline works.
 
 ### M1.1 - Ugly MVP ✅
 
 **What to build:**
 
-- ~~Single Python script (`fetch_reddit.py`)~~
+- ~~Single Python script for Lemmy API ingestion~~
 - ~~Hardcode AWS credentials (we'll fix in cleanup)~~
-- ~~Hit Reddit API without authentication (public endpoint)~~
-- ~~Fetch subreddits from 4 independent sources, save each separately to bronze:~~
-  - ~~`/subreddits/popular.json` → `bronze/subreddits/popular/`~~
-  - ~~`/subreddits/new.json` → `bronze/subreddits/new/`~~
-  - ~~`/r/popular/hot.json?sr_detail=true` → `bronze/subreddits/hot/`~~
-  - ~~`/r/popular/rising.json?sr_detail=true` → `bronze/subreddits/rising/`~~
-- ~~Use `sr_detail=true` to get subreddit metadata inline (avoids N+1 API calls)~~
-- ~~Fetch top posts from each subreddit via `/r/{subreddit}/hot.json`~~
-- ~~Save each source as separate JSON file to S3~~
-
-> **Note:** Source tagging happens in transformation (silver layer), not ingestion. Each subreddit gets tagged with its source(s) for UI badges.
+- ~~Hit Lemmy API (public endpoint)~~
+- ~~Fetch communities and posts with various sort tags~~
+- ~~Save each source/tag combo as separate JSON file to S3~~
 
 **Code structure:**
 
 ```python
-# fetch_reddit.py
-import requests
+# fetch_lemmy.py
+import httpx
 import json
 import boto3
 from datetime import datetime
 
 # Hardcoded (will fix later)
-AWS_ACCESS_KEY = "..."
-AWS_SECRET_KEY = "..."
-BUCKET_NAME = "reddit-data-bronze"
+BUCKET_NAME = "lemmy-bronze-data"
 
-# Fetch from Reddit
+# Fetch from Lemmy API
 # Save to S3
 # Done!
 
@@ -258,7 +244,7 @@ BUCKET_NAME = "reddit-data-bronze"
 
 - ✓ Script runs without errors
 - ✓ You see the JSON file in S3 console
-- ✓ JSON contains subreddit data (name, description, subscribers, etc.)
+- ✓ JSON contains community/post data (name, description, subscribers, etc.)
 
 ### M1.2 - Cleanup ✅
 
@@ -270,19 +256,19 @@ BUCKET_NAME = "reddit-data-bronze"
 - ~~Create basic folder structure:~~
 
     ```
-    reddit-recommender/
+    lemmy-recommender/
     ├── src/
     │   ├── __main__.py
     │   ├── config.py
     │   ├── ingestion/
-    │   │   └── fetch_reddit.py
+    │   │   └── fetch_lemmy.py
     │   ├── storage/
     │   │   ├── read.py
     │   │   └── write.py
     │   ├── transformation/
     │   │   └── transform.py
     │   └── models/
-    │       └── reddit.py
+    │       └── lemmy.py
     ├── config/
     │   └── config.yaml
     ├── airflow/
@@ -312,20 +298,20 @@ BUCKET_NAME = "reddit-data-bronze"
 
 **What to build:**
 
-- ~~New script (`transform_reddit.py`)~~
+- ~~New script for transformation~~
 - ~~Read the JSON from S3 bronze layer~~
 - ~~Use Polars to:~~
     - ~~Remove null/invalid entries~~
     - ~~Standardize field names (snake_case)~~
-    - ~~Extract only needed fields (subreddit name, description, subscribers, created_date, url)~~
+    - ~~Extract only needed fields (community name, description, subscribers, created_date, url)~~
     - ~~Add processing timestamp~~
 - ~~Save to S3 silver layer as **Parquet** file~~
-- ~~Example path: `s3://reddit-data-silver/subreddits/2025-12-20.parquet`~~
+- ~~Example path: `s3://lemmy-silver-data/communities/hot/2025-12-20.parquet`~~
 
 **Code structure:**
 
 ```python
-# transform_reddit.py
+# transform_lemmy.py
 import polars as pl
 import boto3
 
@@ -348,11 +334,11 @@ import boto3
 
 - ~~Separate bronze and silver logic into different modules~~
 - ~~Add defensive data handling:~~
-    - ~~Filter records missing required fields (e.g., subreddit_name)~~
+    - ~~Filter records missing required fields (e.g., community_name)~~
     - ~~Fill nulls with sensible defaults~~
     - ~~Log null statistics before filling (visibility into data quality)~~
 - ~~Implement better file naming with partitioning:~~
-    - ~~`s3://reddit-data-silver/subreddits/year=2025/month=12/day=20/data.parquet`~~
+    - ~~`s3://lemmy-silver-data/communities/hot/year=2025/month=12/day=20/data.parquet`~~
 - ~~Add logging for transformation stats (records processed, dropped, etc.)~~
 
 **Success Criteria:**
@@ -375,22 +361,28 @@ import boto3
 **What to build:**
 
 - ~~Local Airflow setup using docker-compose~~
-- ~~5 DAGs using TaskFlow API and Dataset triggers:~~
-    - ~~4 Source DAGs (popular, new, hot, rising): `bronze()` → `silver()` tasks~~
-    - ~~1 Gold DAG: Triggered when ALL silver datasets are updated~~
-- ~~Per-source scheduling:~~
-    - ~~Popular/New: Daily~~
-    - ~~Hot: Hourly~~
-    - ~~Rising: Every 2 hours~~
+- ~~18 DAGs using TaskFlow API and Dataset triggers:~~
+    - ~~16 Source DAGs (10 posts + 6 communities): `bronze()` → `silver()` tasks~~
+    - ~~2 Gold DAGs: One per source type, triggered when ANY respective silver dataset updates~~
+- ~~Per-tag scheduling:~~
+    - ~~Every 3h: hot, active, scaled~~
+    - ~~Every 4h: new~~
+    - ~~Every 6h: most_comments~~
+    - ~~Every 8h: top_day~~
+    - ~~Every 12h: top_week, top_month, top_year, top_all~~
 - ~~Event-driven Gold merge via Airflow Datasets (no polling)~~
 
 **Architecture:**
 
 ```
-    popular_dag ──► silver_popular_dataset ──┐
-    new_dag ──────► silver_new_dataset ──────┼──► gold_dag (when ALL 4 updated)
-    hot_dag ──────► silver_hot_dataset ──────┤
-    rising_dag ───► silver_rising_dataset ───┘
+    posts_hot_dag ────────► silver_posts_hot ────────┐
+    posts_new_dag ────────► silver_posts_new ────────┼──► posts_gold_dag
+    ...                                              │
+    posts_top_all_dag ────► silver_posts_top_all ───┘
+
+    communities_hot_dag ──► silver_communities_hot ──┐
+    ...                                              ├──► communities_gold_dag
+    communities_top_all ──► silver_communities_top_all
 ```
 
 **Code structure:**
@@ -399,39 +391,69 @@ import boto3
 # airflow/dags/pipeline.py
 from airflow.datasets import Dataset
 from airflow.decorators import dag, task
+from src import create_bronze_source, create_gold, create_silver_source
+from src.config import get_all_streams, get_gold_tags, get_s3_bucket, SOURCES
 
-SILVER_POPULAR_DATASET = Dataset("s3://reddit-data-silver/subreddits/popular")
-# ... other datasets
+# Schedule mapping by tag (actual intervals)
+TAG_SCHEDULES = {
+    "hot": timedelta(hours=3),
+    "active": timedelta(hours=3),
+    "scaled": timedelta(hours=3),
+    "new": timedelta(hours=4),
+    "most_comments": timedelta(hours=6),
+    "top_day": timedelta(hours=8),
+    "top_week": timedelta(hours=12),
+    "top_month": timedelta(hours=12),
+    "top_year": timedelta(hours=12),
+    "top_all": timedelta(hours=12),
+}
 
-def create_source_dag(source: SourceTag, schedule: str, outlet_dataset: Dataset):
-    @dag(dag_id=f"reddit_{source.value}_pipeline", schedule=schedule, ...)
+# Build datasets from config
+SILVER_DATASETS = {
+    (source, tag): Dataset(f"s3://{get_s3_bucket('silver')}/{source}/{tag}")
+    for source, tag, _ in get_all_streams()
+}
+
+def create_source_dag(source, tag, schedule, outlet_dataset):
+    @dag(dag_id=f"lemmy_{source}_{tag}_pipeline", schedule=schedule, ...)
     def source_pipeline():
         @task
         def bronze():
-            create_bronze_source(source)
+            create_bronze_source(source, tag)
 
         @task(outlets=[outlet_dataset])
         def silver():
-            create_silver_source(source)
+            create_silver_source(source, tag)
 
         bronze() >> silver()
     return source_pipeline()
 
-@dag(schedule=ALL_SILVER_DATASETS)  # Triggers when ALL datasets updated
-def reddit_gold_pipeline():
+# Instantiate all 16 source DAGs dynamically
+for source, tag, _ in get_all_streams():
+    create_source_dag(source, tag, ...)
+
+# Two gold DAGs - trigger when ANY silver dataset for that source updates
+@dag(schedule=[SILVER_DATASETS[("posts", tag)] for tag in get_gold_tags("posts")])
+def lemmy_posts_gold_pipeline():
     @task
     def merge_to_gold():
-        create_gold()
+        create_gold("posts")
     merge_to_gold()
 
+@dag(schedule=[SILVER_DATASETS[("communities", tag)] for tag in get_gold_tags("communities")])
+def lemmy_communities_gold_pipeline():
+    @task
+    def merge_to_gold():
+        create_gold("communities")
+    merge_to_gold()
 ```
 
 **Success Criteria:**
 
 - ✓ Airflow UI accessible at localhost:8080
-- ✓ All 5 DAGs appear in UI
+- ✓ All 18 DAGs appear in UI
 - ✓ Source DAGs can be triggered manually or run on schedule
-- ✓ Gold DAG triggers automatically when all Silver datasets complete
+- ✓ Gold DAGs trigger automatically when respective Silver datasets complete
 - ✓ Data appears in S3 after DAGs complete
 
 ### M3.2 - Cleanup ✅
@@ -490,10 +512,7 @@ EC2 (t3.medium) + Elastic IP
 
 > **Note:** See `plans/ec2-deployment.md` for detailed implementation steps.
 
-> **Known Issue:** Reddit API blocks requests from datacenter IPs (TLS fingerprinting). Currently using conditional OAuth - works locally (residential IP), blocked on EC2. Options if Reddit doesn't approve API registration:
-> 1. Use `curl_cffi` library (mimics curl's TLS fingerprint)
-> 2. Use Reddit RSS feeds (limited metadata)
-> 3. Run ingestion locally, push to S3, EC2 handles silver/gold only
+> **Note:** Lemmy API is public and doesn't block datacenter IPs, so EC2 can run the full pipeline including ingestion.
 
 ---
 
@@ -501,32 +520,32 @@ EC2 (t3.medium) + Elastic IP
 
 ### Milestone 4: User Feedback System (CLI)
 
-**Goal:** Let users rate subreddits via CLI and store preferences.
+**Goal:** Let users rate communities via CLI and store preferences.
 
 ### M4.1 - Ugly MVP
 
 **What to build:**
 
-- CLI script (`rate_subreddits.py`)
-- Read 10 random subreddits from S3 silver layer
-- Show each subreddit name
+- CLI script (`rate_communities.py`)
+- Read 10 random communities from S3 silver layer
+- Show each community name
 - User types 'y' (like) or 'n' (dislike)
 - Save ratings to S3 as **Parquet** file
-- Structure: `user_id, subreddit_name, rating, timestamp`
-- Example path: `s3://reddit-data-gold/ratings/user_ratings.parquet`
+- Structure: `user_id, community_name, rating, timestamp`
+- Example path: `s3://lemmy-gold-data/ratings/user_ratings.parquet`
 - Single user only (hardcoded user_id = 'user1')
 - maybe ask user what he likes, like in content websites
 
 **Code structure:**
 
 ```python
-# rate_subreddits.py
+# rate_communities.py
 import polars as pl
 import boto3
 
-# Load 10 random subreddits from silver
-# For each subreddit:
-#   print(subreddit_name)
+# Load 10 random communities from silver
+# For each community:
+#   print(community_name)
 #   rating = input("Like? (y/n): ")
 #   save to list
 # Write all ratings to Parquet in S3
@@ -535,7 +554,7 @@ import boto3
 
 **Success Criteria:**
 
-- ✓ CLI shows 10 subreddits
+- ✓ CLI shows 10 communities
 - ✓ You can rate all 10
 - ✓ Parquet file appears in S3 gold layer
 - ✓ File contains your ratings with correct structure
@@ -544,25 +563,25 @@ import boto3
 
 **What to improve:**
 
-- Add progress tracking: "You've rated 23 subreddits. 7 more needed for recommendations."
+- Add progress tracking: "You've rated 23 communities. 7 more needed for recommendations."
 - Better CLI display:
-    
+
     ```
     [Progress: 23/30 ratings needed]
-    
-    Subreddit: r/technology
+
+    Community: technology@lemmy.world
     Description: Tech news and discussions
-    Subscribers: 14.2M
+    Subscribers: 14.2K
     Top post: "New AI breakthrough in quantum computing"
-    
-    Rate this subreddit:
+
+    Rate this community:
       [y] Like    [n] Dislike    [s] Skip
-    
+
     Your choice: _
-    
+
     ```
-    
-- Add category diversity: Don't show 10 tech subreddits in a row
+
+- Add category diversity: Don't show 10 tech communities in a row
 - Add user_id support: Prompt for username, support multiple users
 - Add skip option: User can skip without rating
 - Append to existing ratings file (don't overwrite)
@@ -581,20 +600,20 @@ import boto3
 
 ### Milestone 5: Cold Start with Embeddings
 
-**Goal:** Generate embeddings for subreddits and find similar ones based on user preferences.
+**Goal:** Generate embeddings for communities and find similar ones based on user preferences.
 
 ### M5.1 - Ugly MVP
 
 **What to build:**
 
 - Check if user has 30+ ratings (minimum threshold)
-- If less than 30, show message: "Please rate X more subreddits to get recommendations"
+- If less than 30, show message: "Please rate X more communities to get recommendations"
 - If 30+, proceed:
-    - Read subreddit descriptions from silver layer
+    - Read community descriptions from silver layer
     - Use **Groq API** to generate embeddings for descriptions
     - Store embeddings in local **ChromaDB**
-    - Find user's liked subreddits (from gold layer)
-    - Query ChromaDB for 10 most similar subreddits using cosine similarity
+    - Find user's liked communities (from gold layer)
+    - Query ChromaDB for 10 most similar communities using cosine similarity
     - Show recommendations in CLI
 
 **Code structure:**
@@ -609,7 +628,7 @@ from groq import Groq
 # If >= 30:
 #   Generate embeddings with Groq
 #   Store in ChromaDB
-#   Get user's liked subreddits
+#   Get user's liked communities
 #   Query ChromaDB for similar ones
 #   Print recommendations
 
@@ -620,7 +639,7 @@ from groq import Groq
 - ✓ System requires 30+ ratings before showing recommendations
 - ✓ Embeddings are generated successfully
 - ✓ ChromaDB stores embeddings locally
-- ✓ CLI shows 10 recommended subreddits
+- ✓ CLI shows 10 recommended communities
 - ✓ Recommendations are actually related to user's likes (manual verification)
 
 ### M5.2 - Cleanup
@@ -631,10 +650,10 @@ from groq import Groq
     - Set up local PostgreSQL with pgvector extension (Docker)
     - Create table for embeddings with proper indexes
     - Migrate existing embeddings from ChromaDB
-- Batch embedding generation (process 100 subreddits at once)
+- Batch embedding generation (process 100 communities at once)
 - Add embedding caching:
-    - Don't regenerate embeddings for existing subreddits
-    - Only generate for new subreddits
+    - Don't regenerate embeddings for existing communities
+    - Only generate for new communities
 - Add confidence scores to recommendations:
     - Based on similarity score and number of user ratings
     - Show: "Recommended with 85% confidence"
@@ -690,13 +709,13 @@ EC2 (Airflow) ──────► RDS PostgreSQL
 
 **What to build:**
 
-- After user has rated 50+ subreddits, activate "warm start" mode
+- After user has rated 50+ communities, activate "warm start" mode
 - Weight embeddings by user preferences:
-    - Liked subreddits: +1 weight
-    - Disliked subreddits: -1 weight
+    - Liked communities: +1 weight
+    - Disliked communities: -1 weight
 - Create user preference vector (average of liked embeddings)
-- Find subreddits similar to preference vector
-- Filter out already-rated subreddits
+- Find communities similar to preference vector
+- Filter out already-rated communities
 - Show 10 new recommendations
 
 **Code structure:**
@@ -706,8 +725,8 @@ EC2 (Airflow) ──────► RDS PostgreSQL
 # Get all user ratings
 # If < 50: use cold start (M5)
 # If >= 50:
-#   Create preference vector from liked subreddits
-#   Query pgvector for similar subreddits
+#   Create preference vector from liked communities
+#   Query pgvector for similar communities
 #   Filter out already-rated
 #   Return top 10
 
@@ -717,7 +736,7 @@ EC2 (Airflow) ──────► RDS PostgreSQL
 
 - ✓ After 50+ ratings, system uses warm start
 - ✓ Recommendations change based on recent ratings
-- ✓ Already-rated subreddits don't appear in recommendations
+- ✓ Already-rated communities don't appear in recommendations
 - ✓ Recommendations feel more personalized (manual testing)
 
 ### M6.2 - Cleanup
@@ -728,23 +747,23 @@ EC2 (Airflow) ──────► RDS PostgreSQL
     - Number of ratings user has provided
     - Similarity score
     - Consistency of user preferences
-- Filter out already-rated subreddits more efficiently (database query)
+- Filter out already-rated communities more efficiently (database query)
 - Add diversity to recommendations:
     - Not all top-10 most similar
-    - Include some "adjacent interest" subreddits
+    - Include some "adjacent interest" communities
     - Use exploration vs exploitation strategy
 - Implement negative filtering:
-    - Avoid subreddits similar to disliked ones
+    - Avoid communities similar to disliked ones
     - Weight disliked embeddings negatively in search
 - Add explanation for recommendations:
-    - "Recommended because you liked r/technology and r/programming"
+    - "Recommended because you liked technology@lemmy.world and programming@lemmy.ml"
 
 **Success Criteria:**
 
 - ✓ Recommendations balance similarity and diversity
 - ✓ System avoids content similar to dislikes
 - ✓ Confidence scores are meaningful
-- ✓ Explanations help user understand why subreddit was recommended
+- ✓ Explanations help user understand why community was recommended
 
 ---
 
@@ -752,32 +771,32 @@ EC2 (Airflow) ──────► RDS PostgreSQL
 
 ### Milestone 7: Add Posts Data
 
-**Goal:** Pull hot posts from subreddits and let users rate them.
+**Goal:** Pull posts from communities and let users rate them.
 
 ### M7.1 - Ugly MVP
 
 **What to build:**
 
 - Extend bronze pipeline (M1):
-    - For each trending subreddit, fetch top 10 hot posts
+    - Fetch posts with various sort tags (hot, new, top, etc.)
     - Save posts to S3 bronze as JSON
 - Extend silver pipeline (M2):
     - Transform posts to Parquet
-    - Fields: post_id, subreddit, title, text_snippet, url, score, created_date
+    - Fields: id, name, body, url, community_id, community_name, creator_id, creator_name, published, score, num_comments, upvotes, downvotes, nsfw, featured_community, featured_local, source, created_date, processed_at
 - Update CLI (M4):
-    - After rating subreddits, show posts
+    - After rating communities, show posts
     - Display: title + first 200 chars of text
     - User rates: like/dislike/skip
-    - Save post ratings to gold layer (separate from subreddit ratings)
+    - Save post ratings to gold layer (separate from community ratings)
 
 **Code structure:**
 
 ```python
-# In fetch_reddit.py:
-# After fetching subreddits, fetch posts for each
+# In fetch_lemmy.py:
+# Fetch posts with various sort tags
 
-# In rate_subreddits.py:
-# Add post rating section after subreddit rating
+# In rate_communities.py:
+# Add post rating section after community rating
 
 ```
 
@@ -786,21 +805,21 @@ EC2 (Airflow) ──────► RDS PostgreSQL
 - ✓ Posts appear in bronze and silver layers
 - ✓ CLI shows posts with title and snippet
 - ✓ User can rate posts
-- ✓ Post ratings saved to S3 separately from subreddit ratings
+- ✓ Post ratings saved to S3 separately from community ratings
 
 ### M7.2 - Cleanup
 
 **What to improve:**
 
-- Combine subreddit + post signals for better recommendations:
-    - If user likes posts from r/technology, boost r/technology recommendation
+- Combine community + post signals for better recommendations:
+    - If user likes posts from technology@lemmy.world, boost that community's recommendation
     - Use post content embeddings for finer-grained matching
 - Add post-level embeddings:
     - Generate embeddings for post title + text
-    - Store in pgvector alongside subreddit embeddings
-    - Recommend specific posts, not just subreddits
-- Weight post ratings higher than subreddit ratings:
-    - Post rating = 2x weight of subreddit rating
+    - Store in pgvector alongside community embeddings
+    - Recommend specific posts, not just communities
+- Weight post ratings higher than community ratings:
+    - Post rating = 2x weight of community rating
     - More granular signal of user preferences
 - Add post preview quality indicators:
     - Image post, text post, link post
@@ -808,7 +827,7 @@ EC2 (Airflow) ──────► RDS PostgreSQL
 
 **Success Criteria:**
 
-- ✓ Recommendations use both subreddit and post data
+- ✓ Recommendations use both community and post data
 - ✓ Post embeddings stored in pgvector
 - ✓ System recommends specific posts user will likely enjoy
 - ✓ Post previews are informative
@@ -826,8 +845,8 @@ EC2 (Airflow) ──────► RDS PostgreSQL
 **What to build:**
 
 - Validation script that tests recommendation accuracy:
-    - System suggests 10 subreddits/posts it thinks user will LIKE
-    - System suggests 10 subreddits/posts it thinks user will NOT like
+    - System suggests 10 communities/posts it thinks user will LIKE
+    - System suggests 10 communities/posts it thinks user will NOT like
     - User rates all 20 items
     - Calculate accuracy:
         - Precision: % of "will like" that user actually liked
@@ -863,8 +882,8 @@ EC2 (Airflow) ──────► RDS PostgreSQL
 
 - Jupyter notebook with analytics using Polars:
     - **Trending Analysis:**
-        - Most featured subreddits over time
-        - Subreddits gaining/losing popularity
+        - Most featured communities over time
+        - Communities gaining/losing popularity
         - Trending topics by week/month
     - **User Preference Analysis:**
         - Distribution of user ratings (like vs dislike ratio)
@@ -880,8 +899,8 @@ EC2 (Airflow) ──────► RDS PostgreSQL
         - Processing pipeline health
         - Record count validation (bronze vs silver layer counts)
         - Data quality report (CSV/JSON summary per run)
-        - Anomaly detection: Alert when source returns unusual data volumes (e.g., 2 subreddits instead of ~25)
-        - Cross-source validation: Stats about overlap between sources (e.g., "15% of subreddits appear in 3+ sources")
+        - Anomaly detection: Alert when source returns unusual data volumes (e.g., 2 communities instead of ~25)
+        - Cross-source validation: Stats about overlap between sources (e.g., "15% of communities appear in 3+ sources")
 
 **Deliverables:**
 
@@ -913,7 +932,7 @@ EC2 (Airflow) ──────► RDS PostgreSQL
 - Replace Polars with PySpark in transform pipeline (M2)
 - Keep same bronze → silver logic
 - Test with larger dataset:
-    - Increase to 100+ subreddits
+    - Increase to 100+ communities
     - 1000+ posts
     - Multiple days of historical data
 - Run PySpark locally (not on EMR yet)
@@ -922,13 +941,13 @@ EC2 (Airflow) ──────► RDS PostgreSQL
 **Code structure:**
 
 ```python
-# transform_reddit_spark.py
+# transform_lemmy_spark.py
 from pyspark.sql import SparkSession
 
-spark = SparkSession.builder.appName("RedditTransform").getOrCreate()
+spark = SparkSession.builder.appName("LemmyTransform").getOrCreate()
 
 # Read JSON from bronze
-df = spark.read.json("s3://bronze/...")
+df = spark.read.json("s3://lemmy-bronze-data/...")
 
 # Transform with Spark
 # Write Parquet to silver
@@ -952,7 +971,7 @@ df = spark.read.json("s3://bronze/...")
     - Caching intermediate results
 - Add advanced partitioning:
     - Partition by year/month/day/hour
-    - Partition by subreddit category
+    - Partition by community category
 - Move to AWS EMR or Glue:
     - Set up EMR cluster (or use Glue)
     - Deploy Spark jobs to AWS
@@ -983,7 +1002,7 @@ df = spark.read.json("s3://bronze/...")
 **What to build:**
 
 - Simple FastAPI backend with endpoints:
-    - `POST /rate`: Rate a subreddit or post
+    - `POST /rate`: Rate a community or post
     - `GET /recommendations`: Get personalized recommendations
     - `GET /content`: Get random content to rate
     - `GET /stats`: Get user rating stats
@@ -1117,13 +1136,13 @@ Internet ──► ALB (HTTPS) ──► App Runner/ECS
 ### Social Features
 
 - **Compare Preferences**: See how your interests align with friends
-- **Shared Collections**: Create and share curated subreddit/post collections
+- **Shared Collections**: Create and share curated community/post collections
 - **Community Insights**: Analyze preference patterns across all users
 
 ### AI Agents
 
 - **Content Curator Agent**: Autonomous agent that pre-filters low-quality content
-- **Discovery Agent**: Finds emerging subreddits and niche communities
+- **Discovery Agent**: Finds emerging communities and niche topics
 - **Summarization Agent**: Creates TL;DR summaries of long posts
 - **Sentiment Agent**: Analyzes community sentiment and warns about toxic content
 
