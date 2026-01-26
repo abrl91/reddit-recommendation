@@ -512,69 +512,120 @@ EC2 (t3.medium) + Elastic IP
 
 **Goal:** Harden the data pipeline with production-grade practices before adding new features. This milestone ensures the foundation is solid for the remaining work.
 
-### MX.1 - Data Lineage & Enrichment
+### MX.1 - Data Lineage & Enrichment ✅
 
-**What to build:**
+**What was built:**
 
 - **Data lineage tracking:**
-    - Add `source_file` column in silver layer (tracks which bronze file produced each record)
-    - Add `source_tags` array column in gold layer (tracks which silver tags contributed to each record)
-    - Add `run_id` to all layers (UUID for each pipeline execution, enables debugging)
+    - ✅ Add `source_file` column in silver layer (tracks which bronze file produced each record)
+    - ✅ Add `sources` array column in gold layer (tracks which silver tags contributed to each record)
+    - ✅ Add `run_id` to all layers (UUID for each pipeline execution, enables debugging)
+    - ✅ Created `RunContext` dataclass for pipeline execution tracking
+    - ✅ Created `BronzeResult` dataclass for source file lineage
 
 - **Silver layer enrichment (derived columns):**
     - **Posts:**
-        - `engagement_ratio`: `upvotes / (upvotes + downvotes)` - quality signal (0.0-1.0)
-        - `comment_density`: `num_comments / max(score, 1)` - discussion activity
-        - `content_type`: 'text', 'link', or 'image' based on URL pattern
-        - `body_length`: character count for embeddings
-        - `age_hours`: hours since publication
+        - ✅ `engagement_ratio`: `upvotes / (upvotes + downvotes)` - quality signal (0.0-1.0)
+        - ✅ `comment_density`: `num_comments / max(score, 1)` - discussion activity
+        - ✅ `content_type`: 'text', 'link', or 'image' based on URL pattern
+        - ✅ `body_length`: character count for embeddings
+        - ✅ `age_hours`: hours since publication
     - **Communities:**
-        - `description_length`: character count for embeddings
-        - `is_active_community`: `users_active_week > 10`
-        - `age_hours`: hours since creation
+        - ✅ `description_length`: character count for embeddings
+        - ✅ `is_active_community`: `users_active_week > threshold` (configurable in config.yaml)
+        - ✅ `age_hours`: hours since creation
+
+**Files created/modified:**
+
+| File | Purpose |
+|------|---------|
+| `src/pipeline/run_context.py` | `RunContext` dataclass for pipeline execution tracking |
+| `src/transformation/enrich.py` | `enrich_posts()` and `enrich_communities()` functions |
+| `src/transformation/utils.py` | `is_post_response()` and `is_listing_response()` TypeGuards |
+| `src/storage/read.py` | `BronzeResult` dataclass for source file lineage |
+| `src/transformation/transform.py` | `add_lineage()` function, enrichment integration |
+| `src/transformation/merge_datasources.py` | Added `run_id` to gold layer |
+| `config/config.yaml` | Added `enrichment.active_community_threshold` |
+| `tests/test_enrich.py` | 17 unit tests for enrichment functions |
+
+**Success Criteria:**
+
+- ✅ Every silver record has `source_file` and `run_id` columns
+- ✅ Every gold record has `sources` array showing contributing sources
+- ✅ Posts have enrichment columns: `engagement_ratio`, `comment_density`, `content_type`, `body_length`, `age_hours`
+- ✅ Communities have enrichment columns: `description_length`, `is_active_community`, `age_hours`
+- ✅ Unit tests for all enrichment functions (17 tests)
+- ✅ `active_community_threshold` configurable in `config.yaml`
+
+### MX.2 - Infrastructure Hardening
+
+**What to build:**
+
+- **Terraform outputs (if M3.3 deployed):**
+    - Add outputs for EC2 IP, Airflow URL, bucket names
+    - Makes it easy to get connection info after `terraform apply`
+- **Task groups for UI clarity:**
+    - Group related tasks (bronze, silver) in Airflow UI
+    - Improves visibility when debugging
+- **Docker Compose improvements:**
+    - Add health checks for LocalStack and PostgreSQL
+    - Ensure services start in correct order
+    - Add restart policies for resilience
+
+> **Interview Note:** Remote state management (S3 + DynamoDB locking) and SLA monitoring are important for team/production environments, but overkill for a solo learning project. Be ready to explain *why* they matter: remote state prevents conflicts when multiple people run terraform; SLAs alert on-call when pipelines are late.
 
 **Code structure:**
 
 ```python
-# src/transformation/enrich.py
-def enrich_posts(df: pl.DataFrame) -> pl.DataFrame:
-    return df.with_columns([
-        (pl.col("upvotes") / (pl.col("upvotes") + pl.col("downvotes")))
-        .fill_nan(0.5).alias("engagement_ratio"),
-        (pl.col("num_comments") / pl.col("score").clip(lower_bound=1))
-        .alias("comment_density"),
-        pl.when(pl.col("url").is_null())
-        .then(pl.lit("text"))
-        .when(pl.col("url").str.contains(r"\.(jpg|jpeg|png|gif|webp)$"))
-        .then(pl.lit("image"))
-        .otherwise(pl.lit("link"))
-        .alias("content_type"),
-        # ... body_length, age_hours
-    ])
+# airflow/dags/pipeline.py (updates)
+from airflow.utils.task_group import TaskGroup
 
-def enrich_communities(df: pl.DataFrame) -> pl.DataFrame:
-    return df.with_columns([
-        pl.col("description").fill_null("").str.len_chars().alias("description_length"),
-        (pl.col("users_active_week") > 10).alias("is_active_community"),
-        # ... age_hours
-    ])
+@dag(...)
+def lemmy_posts_hot_pipeline():
+    with TaskGroup("ingest") as ingest:
+        @task
+        def bronze():
+            ...
 
-# src/transformation/transform.py
-def add_lineage(df: pl.DataFrame, source_file: str, run_id: str) -> pl.DataFrame:
-    return df.with_columns([
-        pl.lit(source_file).alias("source_file"),
-        pl.lit(run_id).alias("run_id"),
-    ])
+        @task
+        def silver():
+            ...
+
+    bronze() >> silver()
+```
+
+```yaml
+# docker-compose.yml (updates)
+services:
+  localstack:
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4566/_localstack/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+```
+
+```hcl
+# terraform/outputs.tf (new file)
+output "airflow_url" {
+  value = "http://${aws_eip.airflow.public_ip}:8080"
+}
+output "ec2_public_ip" {
+  value = aws_eip.airflow.public_ip
+}
 ```
 
 **Success Criteria:**
 
-- ✓ Every silver record has `source_file` and `run_id` columns
-- ✓ Every gold record has `source_tags` array showing contributing sources
-- ✓ Posts have enrichment columns: `engagement_ratio`, `comment_density`, `content_type`, `body_length`, `age_hours`
-- ✓ Communities have enrichment columns: `description_length`, `is_active_community`, `age_hours`
+- ✓ `terraform output` shows EC2 IP and Airflow URL (if M3.3 deployed)
+- ✓ Task groups visible in Airflow UI
+- ✓ Docker services have health checks
+- ✓ Services restart on failure (restart: unless-stopped)
 
-### MX.2 - Testing & CI/CD
+---
+
+### MX.3 - Testing & CI/CD
 
 **What to build:**
 
@@ -678,72 +729,6 @@ jobs:
 - ✓ GitHub Actions runs on every push/PR
 - ✓ PRs blocked if ruff, mypy, or pytest fails
 
-### MX.3 - Infrastructure Hardening
-
-**What to build:**
-
-- **Terraform outputs (if M3.3 deployed):**
-    - Add outputs for EC2 IP, Airflow URL, bucket names
-    - Makes it easy to get connection info after `terraform apply`
-- **Task groups for UI clarity:**
-    - Group related tasks (bronze, silver) in Airflow UI
-    - Improves visibility when debugging
-- **Docker Compose improvements:**
-    - Add health checks for LocalStack and PostgreSQL
-    - Ensure services start in correct order
-    - Add restart policies for resilience
-
-> **Interview Note:** Remote state management (S3 + DynamoDB locking) and SLA monitoring are important for team/production environments, but overkill for a solo learning project. Be ready to explain *why* they matter: remote state prevents conflicts when multiple people run terraform; SLAs alert on-call when pipelines are late.
-
-**Code structure:**
-
-```python
-# airflow/dags/pipeline.py (updates)
-from airflow.utils.task_group import TaskGroup
-
-@dag(...)
-def lemmy_posts_hot_pipeline():
-    with TaskGroup("ingest") as ingest:
-        @task
-        def bronze():
-            ...
-
-        @task
-        def silver():
-            ...
-
-    bronze() >> silver()
-```
-
-```yaml
-# docker-compose.yml (updates)
-services:
-  localstack:
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:4566/_localstack/health"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    restart: unless-stopped
-```
-
-```hcl
-# terraform/outputs.tf (new file)
-output "airflow_url" {
-  value = "http://${aws_eip.airflow.public_ip}:8080"
-}
-output "ec2_public_ip" {
-  value = aws_eip.airflow.public_ip
-}
-```
-
-**Success Criteria:**
-
-- ✓ `terraform output` shows EC2 IP and Airflow URL
-- ✓ Task groups visible in Airflow UI
-- ✓ Docker services have health checks
-- ✓ Services restart on failure (restart: unless-stopped)
-
 ### MX.4 - Schema Versioning
 
 **What to build:**
@@ -795,7 +780,7 @@ def add_lineage(df: pl.DataFrame, source_file: str, run_id: str) -> pl.DataFrame
 - ✓ Version is defined in single location
 - ✓ Schema changes are documented with version bumps
 
-> **Note:** MX can be done incrementally—MX.1 is highest priority as it affects data contracts. MX.2, MX.3, and MX.4 can be done in parallel or deferred if eager to start M4.
+> **Note:** MX can be done incrementally—MX.1 (Data Lineage) is highest priority as it affects data contracts. MX.2 (Infrastructure Hardening) improves Docker health checks before integration tests. MX.3 (Testing & CI/CD) and MX.4 (Schema Versioning) can be deferred if eager to start M4.
 
 ---
 
