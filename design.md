@@ -557,71 +557,27 @@ EC2 (t3.medium) + Elastic IP
 - ✅ Unit tests for all enrichment functions (17 tests)
 - ✅ `active_community_threshold` configurable in `config.yaml`
 
-### MX.2 - Infrastructure Hardening
+### MX.2 - Infrastructure Hardening ✅
 
-**What to build:**
+**What was built:**
 
-- **Terraform outputs (if M3.3 deployed):**
-    - Add outputs for EC2 IP, Airflow URL, bucket names
-    - Makes it easy to get connection info after `terraform apply`
-- **Task groups for UI clarity:**
-    - Group related tasks (bronze, silver) in Airflow UI
-    - Improves visibility when debugging
+- **Terraform outputs:**
+    - Added `bucket_bronze`, `bucket_silver`, `bucket_gold` outputs
+    - Makes it easy to get bucket names after `terraform apply`
 - **Docker Compose improvements:**
-    - Add health checks for LocalStack and PostgreSQL
-    - Ensure services start in correct order
-    - Add restart policies for resilience
+    - Added health check for LocalStack (curl to `/_localstack/health`)
+    - Added `restart: unless-stopped` for resilience
+
+**Removed from scope:**
+- Task groups - minimal value for 2-task linear DAGs (bronze → silver)
 
 > **Interview Note:** Remote state management (S3 + DynamoDB locking) and SLA monitoring are important for team/production environments, but overkill for a solo learning project. Be ready to explain *why* they matter: remote state prevents conflicts when multiple people run terraform; SLAs alert on-call when pipelines are late.
 
-**Code structure:**
-
-```python
-# airflow/dags/pipeline.py (updates)
-from airflow.utils.task_group import TaskGroup
-
-@dag(...)
-def lemmy_posts_hot_pipeline():
-    with TaskGroup("ingest") as ingest:
-        @task
-        def bronze():
-            ...
-
-        @task
-        def silver():
-            ...
-
-    bronze() >> silver()
-```
-
-```yaml
-# docker-compose.yml (updates)
-services:
-  localstack:
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:4566/_localstack/health"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    restart: unless-stopped
-```
-
-```hcl
-# terraform/outputs.tf (new file)
-output "airflow_url" {
-  value = "http://${aws_eip.airflow.public_ip}:8080"
-}
-output "ec2_public_ip" {
-  value = aws_eip.airflow.public_ip
-}
-```
-
 **Success Criteria:**
 
-- ✓ `terraform output` shows EC2 IP and Airflow URL (if M3.3 deployed)
-- ✓ Task groups visible in Airflow UI
-- ✓ Docker services have health checks
-- ✓ Services restart on failure (restart: unless-stopped)
+- ✅ `terraform output` shows bucket names (`bucket_bronze`, `bucket_silver`, `bucket_gold`)
+- ✅ Docker LocalStack has health check (curl to `/_localstack/health`)
+- ✅ LocalStack restarts on failure (`restart: unless-stopped`)
 
 ---
 

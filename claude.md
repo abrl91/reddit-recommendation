@@ -208,7 +208,7 @@ python -m src
 
 ## Current Milestone
 
-**M1, M2, M3.1, M3.2, M3.3, MX.1 complete**. Next: MX.2 (Infrastructure Hardening) - Docker health checks, Airflow task groups, Terraform outputs. Then MX.3 (Testing & CI/CD) and MX.4 (Schema Versioning) are optional if eager to start M4 (User Feedback CLI).
+**M1, M2, M3.1, M3.2, M3.3, MX.1, MX.2 complete**. Next: MX.3 (Testing & CI/CD) and MX.4 (Schema Versioning) are optional if eager to start M4 (User Feedback CLI).
 
 ## Notes for Claude
 

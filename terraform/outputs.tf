@@ -30,3 +30,18 @@ output "start_instance_command" {
   description = "Command to start instance"
   value       = "aws ec2 start-instances --instance-ids ${aws_instance.airflow.id}"
 }
+
+output "bucket_bronze" {
+  description = "S3 bucket for bronze (raw) data layer"
+  value       = var.s3_bucket_bronze
+}
+
+output "bucket_silver" {
+  description = "S3 bucket for silver (cleaned) data layer"
+  value       = var.s3_bucket_silver
+}
+
+output "bucket_gold" {
+  description = "S3 bucket for gold (aggregated) data layer"
+  value       = var.s3_bucket_gold
+}

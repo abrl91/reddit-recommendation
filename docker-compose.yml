@@ -10,6 +10,13 @@ services:
     volumes:
       - localstack_data:/var/lib/localstack
       - ./scripts/init-localstack.sh:/etc/localstack/init/ready.d/init-aws.sh
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4566/_localstack/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
 
 volumes:
   localstack_data:
