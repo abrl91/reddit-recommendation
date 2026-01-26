@@ -31,11 +31,16 @@ class GoldConfig(TypedDict):
     tags: list[str]
 
 
+class EnrichmentConfig(TypedDict):
+    active_community_threshold: int
+
+
 class Config(TypedDict):
     lemmy_api_base_url: str
     s3: S3Config
     data_streams: dict[SourceType, dict[str, StreamConfig]]
     gold: dict[SourceType, GoldConfig]
+    enrichment: EnrichmentConfig
 
 
 @lru_cache
@@ -115,6 +120,11 @@ def get_gold_location(source: SourceType) -> tuple[str, str]:
 def get_gold_tags(source: SourceType) -> list[str]:
     config = get_config()
     return config["gold"][source]["tags"]
+
+
+def get_active_community_threshold() -> int:
+    config = get_config()
+    return config["enrichment"]["active_community_threshold"]
 
 
 def get_partition_path(

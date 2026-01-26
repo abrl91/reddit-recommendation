@@ -6,8 +6,10 @@ import structlog
 from src.config import SourceType
 from src.models import RawListingResponse, RawPostResponse
 from src.transformation.context import pipeline_step
+from src.transformation.enrich import enrich_communities, enrich_posts
 from src.transformation.prepare import extract_with_source
 from src.transformation.quality import validate_and_clean
+from src.transformation.utils import is_post_response
 
 logger = structlog.get_logger().bind(module="transform")
 
@@ -147,6 +149,12 @@ def clean_source_data(
 
     with pipeline_step("add_metadata", record_count):
         df = df.pipe(add_metadata)
+
+    with pipeline_step("enrich", record_count):
+        if is_post_response(response):
+            df = enrich_posts(df)
+        else:
+            df = enrich_communities(df)
 
     with pipeline_step("add_lineage", record_count):
         df = add_lineage(df, source_file, run_id)

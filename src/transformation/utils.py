@@ -1,3 +1,5 @@
+from typing import TypeGuard
+
 import structlog
 
 from src.config import get_lemmy_base_url
@@ -7,10 +9,23 @@ from src.models.lemmy import (
     PostData,
     RawCommunityView,
     RawListingResponse,
+    RawPostResponse,
     RawPostView,
 )
 
 logger = structlog.get_logger().bind(module="transformation")
+
+
+def is_post_response(
+    response: RawPostResponse | RawListingResponse,
+) -> TypeGuard[RawPostResponse]:
+    return "posts" in response
+
+
+def is_listing_response(
+    response: RawPostResponse | RawListingResponse,
+) -> TypeGuard[RawListingResponse]:
+    return "communities" in response
 
 
 def _map_community_to_data(comm_view: RawCommunityView) -> CommunityData | None:

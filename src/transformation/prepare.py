@@ -1,4 +1,4 @@
-from typing import Any, TypeGuard
+from typing import Any
 
 import polars as pl
 
@@ -7,20 +7,9 @@ from src.models import RawListingResponse, RawPostResponse
 from src.transformation.utils import (
     _map_post_to_data,
     extract_communities_from_list,
+    is_listing_response,
+    is_post_response,
 )
-
-
-def _is_post_response(
-    response: RawPostResponse | RawListingResponse,
-) -> TypeGuard[RawPostResponse]:
-    return "posts" in response
-
-
-def _is_listing_response(
-    response: RawPostResponse | RawListingResponse,
-) -> TypeGuard[RawListingResponse]:
-    return "communities" in response
-
 
 SchemaDefinition = dict[str, Any]
 
@@ -149,9 +138,9 @@ def _extract_communities(response: RawListingResponse) -> pl.DataFrame:
 def extract_with_source(
     response: RawPostResponse | RawListingResponse, source: SourceType, tag: str
 ) -> pl.DataFrame:
-    if _is_post_response(response):
+    if is_post_response(response):
         df = _extract_posts(response)
-    elif _is_listing_response(response):
+    elif is_listing_response(response):
         df = _extract_communities(response)
     else:
         raise ValueError("Response must contain 'posts' or 'communities' key")

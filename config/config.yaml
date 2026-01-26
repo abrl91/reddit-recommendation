@@ -65,3 +65,6 @@ gold:
     tags: [hot, new, active, top_day, top_week, top_month]
   posts:
     tags: [hot, new, scaled, active, top_day, top_week, top_month, top_year, top_all, most_comments]
+
+enrichment:
+  active_community_threshold: 10  # users_active_week > threshold = active
