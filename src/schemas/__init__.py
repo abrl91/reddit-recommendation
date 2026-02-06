@@ -1,0 +1,9 @@
+from src.schemas.gold import GOLD_COMMUNITY_SCHEMA, GOLD_POST_SCHEMA
+from src.schemas.silver import SILVER_COMMUNITY_SCHEMA, SILVER_POST_SCHEMA
+
+__all__ = [
+    "SILVER_COMMUNITY_SCHEMA",
+    "SILVER_POST_SCHEMA",
+    "GOLD_COMMUNITY_SCHEMA",
+    "GOLD_POST_SCHEMA",
+]
