@@ -70,10 +70,7 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: "3.11"
-      - run: |
-          pip install -e .
-          pip install pytest pytest-mock
-          pip install "apache-airflow==2.10.4" --constraint "https://raw.githubusercontent.com/apache/airflow/constraints-2.10.4/constraints-3.11.txt"
+      - run: pip install -e . "apache-airflow==2.10.4" pytest pytest-mock
       - run: pytest tests/test_dag_validation.py --tb=short
         env:
           AIRFLOW_HOME: ${{ github.workspace }}/airflow
