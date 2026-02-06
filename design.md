@@ -1378,6 +1378,8 @@ Internet ──► ALB (HTTPS) ──► App Runner/ECS
 
 ### AI Agents
 
+> **Orchestration Note:** These agents are a strong candidate for **Temporal** instead of Airflow. Temporal's durable execution model (workflow-as-code, automatic retries, state persistence across crashes) is purpose-built for long-running, stateful agent workflows — unlike Airflow which is designed for scheduled DAGs. Airflow stays for the data pipeline (M1-M3); Temporal gets introduced here.
+
 - **Content Curator Agent**: Autonomous agent that pre-filters low-quality content
 - **Discovery Agent**: Finds emerging communities and niche topics
 - **Summarization Agent**: Creates TL;DR summaries of long posts
