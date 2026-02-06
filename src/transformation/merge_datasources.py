@@ -18,7 +18,9 @@ def _get_dedup_key(columns: list[str]) -> DedupKey:
     return "community_name"
 
 
-def merge_silver_sources(silver_data: dict[str, pl.DataFrame], run_id: str) -> pl.DataFrame:
+def merge_silver_sources(
+    silver_data: dict[str, pl.DataFrame], run_id: str
+) -> pl.DataFrame:
     """Deduplicates by primary key (post_id or community_name), aggregates source tags."""
     if not silver_data:
         logger.warning("No silver sources provided for Gold merge")
@@ -47,17 +49,18 @@ def merge_silver_sources(silver_data: dict[str, pl.DataFrame], run_id: str) -> p
 
     total_records = len(combined)
     dedup_key = _get_dedup_key(combined.columns)
-    logger.info("Combined silver sources",
-                total_records=total_records, dedup_key=dedup_key)
+    logger.info(
+        "Combined silver sources", total_records=total_records, dedup_key=dedup_key
+    )
 
     with pipeline_step("deduplicate_and_aggregate", record_count=total_records):
-        non_key_cols = [
-            c for c in combined.columns if c not in (dedup_key, "source")
-        ]
+        non_key_cols = [c for c in combined.columns if c not in (dedup_key, "source")]
 
         merged = combined.group_by(dedup_key).agg(
-            [pl.col(c).first()  # for simplicity using first
-             for c in non_key_cols]
+            [
+                pl.col(c).first()  # for simplicity using first
+                for c in non_key_cols
+            ]
             + [pl.col("source").alias("sources")]
         )
 

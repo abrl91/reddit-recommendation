@@ -32,10 +32,12 @@ def add_metadata(df: pl.DataFrame) -> pl.DataFrame:
 
 
 def add_lineage(df: pl.DataFrame, source_file: str, run_id: str) -> pl.DataFrame:
-    return df.with_columns([
-        pl.lit(source_file).alias("source_file"),
-        pl.lit(run_id).alias("run_id"),
-    ])
+    return df.with_columns(
+        [
+            pl.lit(source_file).alias("source_file"),
+            pl.lit(run_id).alias("run_id"),
+        ]
+    )
 
 
 def log_null_stats(df: pl.DataFrame) -> pl.DataFrame:

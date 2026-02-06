@@ -220,8 +220,7 @@ class TestEnrichCommunities:
 
     def test_description_length_calculation(self) -> None:
         """Description length should count characters correctly."""
-        df = self._make_community_df(
-            description="A community about Python programming")
+        df = self._make_community_df(description="A community about Python programming")
 
         result = enrich_communities(df)
 

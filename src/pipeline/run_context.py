@@ -5,7 +5,6 @@ from uuid import uuid4
 
 @dataclass(frozen=True)
 class RunContext:
-
     run_id: str
     started_at: datetime
 

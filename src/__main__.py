@@ -98,8 +98,7 @@ def create_gold(
 
         if not silver_data:
             log.error("No silver data found for any tag")
-            raise StorageError(
-                f"No silver data available for {source} Gold merge")
+            raise StorageError(f"No silver data available for {source} Gold merge")
 
         merged_data = merge_silver_sources(silver_data, run_id=run_ctx.run_id)
         save_gold(merged_data, source)

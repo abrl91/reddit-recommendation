@@ -29,6 +29,7 @@ class BronzeResult:
     data: RawPostResponse | RawListingResponse
     source_key: str  # e.g., "posts/hot/year=2025/month=01/day=25/hour=14/data.json"
 
+
 logger = structlog.get_logger().bind(module="storage")
 
 
@@ -86,7 +87,9 @@ def read_bronze(
                 try:
                     file_response = s3_client.get_object(Bucket=bucket, Key=key)
                     content = file_response["Body"].read().decode("utf-8")
-                    data = cast(RawListingResponse | RawPostResponse, json.loads(content))
+                    data = cast(
+                        RawListingResponse | RawPostResponse, json.loads(content)
+                    )
                     results.append((key, data))
                 except Exception as e:
                     logger.error("Failed to read file from S3", key=key, error=str(e))
