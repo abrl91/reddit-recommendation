@@ -76,5 +76,5 @@ jobs:
           pip install "apache-airflow==2.10.4" --constraint "https://raw.githubusercontent.com/apache/airflow/constraints-2.10.4/constraints-3.11.txt"
       - run: pytest tests/test_dag_validation.py --tb=short
         env:
-          AIRFLOW_HOME: ./airflow
+          AIRFLOW_HOME: ${{ github.workspace }}/airflow
           USE_LOCALSTACK: "true"
